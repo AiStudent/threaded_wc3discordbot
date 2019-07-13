@@ -376,12 +376,23 @@ class Client(discord.Client):
             await self.show_queue_handler(message)
         elif command == '!pop' and payload[0]:
             await self.pop_queue_handler(message, payload)
+        elif command == '!help':
+            await self.help_handler(message)
         for attachment in message.attachments:
             if attachment.filename[-4:] == '.w3g':
                 data = requests.get(attachment.url).content
                 await self.replay_handler(message, data)
             else:
                 await messager.send('Not a wc3 replay.')
+
+    @staticmethod
+    async def help_handler(message):
+        commands = ['!sd name', '!timer t', '!queue name', '!leave name', '!show', '!pop nr', '!help']
+        msg = '```'
+        for command in commands:
+            msg += command + '\n'
+        msg += '```'
+        await message.channel.send(msg)
 
     @staticmethod
     async def pop_queue_handler(message, payload):
@@ -406,9 +417,9 @@ class Client(discord.Client):
     async def leave_handler(message, payload):
         try:
             Client.player_queue.remove(payload)
+            await Client.show_queue_handler(message)
         except ValueError:
-            await message.channel.send(payload + 'not found in queue.')
-        await Client.show_queue_handler(message)
+            await message.channel.send(payload + ' not found in queue.')
 
     @staticmethod
     async def queue_handler(message, payload):
