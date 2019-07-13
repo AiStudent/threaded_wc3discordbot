@@ -13,7 +13,7 @@ from w3gtest.decompress import CouldNotDecompress
 from w3gtest.dota_stats import get_dota_w3mmd_stats
 from w3gtest.dota_stats import NotCompleteGame
 from w3gtest.dota_stats import DotaPlayer
-from elo import teams_update_elo
+from elo import teams_update_elo, team_win_elos, avg_team_elo
 
 
 def connect_to_db():
@@ -233,6 +233,22 @@ class DBEntry:
             self.avgcsdenies = 0.0
 
 
+def slash_delimited(*args):
+    string = '('
+    for n in range(len(args)-1):
+        string += str(args[n]) + '/'
+    string += str(args[-1]) + ')'
+    return string
+
+
+def strwidth(name: str, width, *args):
+    string = name.ljust(width)
+    for n in range(0, len(args)-2, 2):
+        string += (str(args[n])+', ').rjust(args[n+1])
+    string += str(args[-2])
+    return string
+
+
 def decompress_parse_db_replay(data, status_queue: queue.Queue):
     status_queue.put('Attempting to decompress..')
     data = decompress_replay(data)
@@ -241,10 +257,10 @@ def decompress_parse_db_replay(data, status_queue: queue.Queue):
     # check if already uploaded
     stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
     md5 = get_hash(stats_bytes)
-    if check_if_replay_exists(md5):
-        return "Replay already uploaded"
-    else:
-        save_file(data, md5)
+    #if check_if_replay_exists(md5):
+    #    return "Replay already uploaded"
+    #else:
+    #    save_file(data, md5)
 
     team1 = []
     team2 = []
@@ -268,6 +284,9 @@ def decompress_parse_db_replay(data, status_queue: queue.Queue):
         db_entries += [db_entry]
 
     # determine elo change
+    team1_win_elo_inc, team2_win_elo_inc = team_win_elos(team1, team2)
+    team1_avg_elo, team2_avg_elo = avg_team_elo(team1), avg_team_elo(team2)
+
     teams_update_elo(team1, team2, winner)
 
     # add up stats
@@ -301,16 +320,32 @@ def decompress_parse_db_replay(data, status_queue: queue.Queue):
     for db_entry in old_db_entries:
         update_dota_player_in_db(db_entry)
 
-    # statistics message
+    # structure statistics return message
     winner = ['Sentinel', 'Scourge'][winner-1]
-    msg = "```Winner: " + winner + ', ' + str(mins) + 'm, ' + str(secs) + 's' + '\n'
-    for dota_player in dota_players:
-        msg += str((dota_player.name, dota_player.kills, dota_player.deaths, dota_player.assists)) + '\n'
+    msg = "```Winner: " + winner + ', ' + str(mins) + 'm, ' + str(secs) + 's, elo ratio (' +\
+          str(round(team1_win_elo_inc, 1)) + '/' + str(round(team2_win_elo_inc, 1)) + ')\n'
+
+    team1 = [dota_player for dota_player in dota_players if dota_player.team == 1]
+    team2 = [dota_player for dota_player in dota_players if dota_player.team == 2]
+
+    msg += 'sentinel avg elo: ' + str(round(team1_avg_elo, 1)) + '\n'
+    for dota_player in team1:
+        msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
+                        dota_player.deaths, 4, dota_player.assists, 4) + '\n'
+    msg += 'scourge avg elo: ' + str(round(team2_avg_elo, 1)) + '\n'
+    for dota_player in team2:
+        msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
+                        dota_player.deaths, 4, dota_player.assists, 4) + '\n'
+
     msg += "```"
+
     return msg
 
 
 class Client(discord.Client):
+
+    player_queue = []
+
     async def on_ready(self):
         print('Logged on as', self.user)
 
@@ -333,13 +368,56 @@ class Client(discord.Client):
             await self.timer_handler(message, payload)
         elif command == '!sd' and payload:
             await self.sd_handler(message, payload)
-
+        elif command == '!queue' and payload:
+            await self.queue_handler(message, payload[0])
+        elif command == '!leave' and payload:
+            await self.leave_handler(message, payload[0])
+        elif command == '!show':
+            await self.show_queue_handler(message)
+        elif command == '!pop' and payload[0]:
+            await self.pop_queue_handler(message, payload)
         for attachment in message.attachments:
             if attachment.filename[-4:] == '.w3g':
                 data = requests.get(attachment.url).content
                 await self.replay_handler(message, data)
             else:
                 await messager.send('Not a wc3 replay.')
+
+    @staticmethod
+    async def pop_queue_handler(message, payload):
+        delim = int(payload[0])
+        Client.player_queue, people = Client.player_queue[delim:], Client.player_queue[:delim]
+        await message.channel.send('Popped: ' + str(people))
+        await Client.show_queue_handler(message)
+
+    @staticmethod
+    async def show_queue_handler(message):
+        msg = '```'
+
+        if len(Client.player_queue):
+            for n in range(len(Client.player_queue)):
+                msg += str(n+1) + '  ' + str(Client.player_queue[n]) + '\n'
+        else:
+            msg += 'Empty'
+        msg += '```'
+        await message.channel.send(msg)
+
+    @staticmethod
+    async def leave_handler(message, payload):
+        try:
+            Client.player_queue.remove(payload)
+        except ValueError:
+            await message.channel.send(payload + 'not found in queue.')
+        await Client.show_queue_handler(message)
+
+    @staticmethod
+    async def queue_handler(message, payload):
+        name = payload
+
+        print(name, type(name))
+        if name not in Client.player_queue:
+            Client.player_queue += [name]
+        await Client.show_queue_handler(message)
 
     @staticmethod
     async def replay_handler(message: discord.message.Message, data):
@@ -385,8 +463,8 @@ class Client(discord.Client):
             db_entry = DBEntry(t1.rv)
             await response.send(
                 "Stats for " + name + ': ' + str(round(db_entry.elo, 1)) + ' elo, ' +
-                'W/L (' + str(db_entry.wins) + '/' + str(db_entry.loss) + '), avg KDA (' +
-                str(db_entry.avgkills) + '/' + str(db_entry.avgdeaths) + '/' + str(db_entry.avgassists) + ')'
+                'W/L ' + slash_delimited(db_entry.wins, db_entry.loss) + ', avg KDA ' +
+                slash_delimited(db_entry.avgkills, db_entry.avgdeaths, db_entry.avgassists)
             )
         else:
             await response.send('No stats on ' + name)
