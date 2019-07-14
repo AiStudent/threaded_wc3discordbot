@@ -249,18 +249,18 @@ def strwidth(name: str, width, *args):
     return string
 
 
-def decompress_parse_db_replay(data, status_queue: queue.Queue):
+def decompress_parse_db_replay(replay, status_queue: queue.Queue):
     status_queue.put('Attempting to decompress..')
-    data = decompress_replay(data)
+    data = decompress_replay(replay)
     dota_players, winner, mins, secs = get_dota_w3mmd_stats(data)
 
     # check if already uploaded
     stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
     md5 = get_hash(stats_bytes)
-    #if check_if_replay_exists(md5):
-    #    return "Replay already uploaded"
-    #else:
-    #    save_file(data, md5)
+    if check_if_replay_exists(md5):
+        return "Replay already uploaded"
+    else:
+        save_file(replay, md5)
 
     team1 = []
     team2 = []
@@ -308,7 +308,6 @@ def decompress_parse_db_replay(data, status_queue: queue.Queue):
         db_entry.avgassists = db_entry.assists / db_entry.games
         db_entry.avgcskills = db_entry.cskills / db_entry.games
         db_entry.avgcsdenies = db_entry.csdenies / db_entry.games
-        print(db_entry.name, db_entry.cskills, db_entry.avgcskills)
 
     status_queue.put('Trying to put into db..')
 
@@ -368,16 +367,19 @@ class Client(discord.Client):
             await self.timer_handler(message, payload)
         elif command == '!sd' and payload:
             await self.sd_handler(message, payload)
-        elif command == '!queue' and payload:
-            await self.queue_handler(message, payload[0])
-        elif command == '!leave' and payload:
-            await self.leave_handler(message, payload[0])
+        elif command == '!queue':
+            await self.queue_handler(message, payload)
+        elif command == '!leave':
+            await self.leave_handler(message, payload)
         elif command == '!show':
             await self.show_queue_handler(message)
         elif command == '!pop' and payload[0]:
             await self.pop_queue_handler(message, payload)
         elif command == '!help':
             await self.help_handler(message)
+        elif len(message.attachments) == 0:
+            await message.channel.send('!help or upload a replay.')
+        
         for attachment in message.attachments:
             if attachment.filename[-4:] == '.w3g':
                 data = requests.get(attachment.url).content
@@ -387,9 +389,13 @@ class Client(discord.Client):
 
     @staticmethod
     async def help_handler(message):
-        commands = ['!sd name', '!timer t', '!queue name', '!leave name', '!show', '!pop nr', '!help']
+        commands = ['!sd name', '!timer t', '!help']
+        queue_commands = ['!queue name', '!leave name', '!show', '!pop amount']
         msg = '```'
         for command in commands:
+            msg += command + '\n'
+        msg += 'Queue commands (beta: possible to queue others):\n'
+        for command in queue_commands:
             msg += command + '\n'
         msg += '```'
         await message.channel.send(msg)
@@ -398,7 +404,11 @@ class Client(discord.Client):
     async def pop_queue_handler(message, payload):
         delim = int(payload[0])
         Client.player_queue, people = Client.player_queue[delim:], Client.player_queue[:delim]
-        await message.channel.send('Popped: ' + str(people))
+        msg = ''
+        for n in range(len(people)-1):
+            msg += people[n] + ', '
+        msg += people[-1]
+        await message.channel.send('Popped: ' + msg)
         await Client.show_queue_handler(message)
 
     @staticmethod
@@ -414,18 +424,22 @@ class Client(discord.Client):
         await message.channel.send(msg)
 
     @staticmethod
-    async def leave_handler(message, payload):
+    async def leave_handler(message, payload = None):
+        if payload is None:
+            payload = [str(message.author)]
+        name = payload[0]
         try:
-            Client.player_queue.remove(payload)
+            Client.player_queue.remove(name)
             await Client.show_queue_handler(message)
         except ValueError:
-            await message.channel.send(payload + ' not found in queue.')
+            await message.channel.send(name + ' not found in queue.')
 
     @staticmethod
-    async def queue_handler(message, payload):
-        name = payload
-
-        print(name, type(name))
+    async def queue_handler(message, payload = None):
+        if payload is None:
+            name = str(message.author)
+        else:
+            name = payload[0]
         if name not in Client.player_queue:
             Client.player_queue += [name]
         await Client.show_queue_handler(message)
@@ -475,7 +489,7 @@ class Client(discord.Client):
             await response.send(
                 "Stats for " + name + ': ' + str(round(db_entry.elo, 1)) + ' elo, ' +
                 'W/L ' + slash_delimited(db_entry.wins, db_entry.loss) + ', avg KDA ' +
-                slash_delimited(db_entry.avgkills, db_entry.avgdeaths, db_entry.avgassists)
+                slash_delimited(round(db_entry.avgkills,1), round(db_entry.avgdeaths,1), round(db_entry.avgassists,1))
             )
         else:
             await response.send('No stats on ' + name)
