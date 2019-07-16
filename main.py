@@ -362,19 +362,39 @@ class Client(discord.Client):
         if len(words) > 1:
             payload = words[1:]
 
+        author = message.author
+        roles = [role.name for role in author.roles]
+        admin = ('admin' in roles) or ('development' in roles)
         messager = Message(message.channel)
         if command == '!timer' and payload:
             await self.timer_handler(message, payload)
-        elif command == '!sd' and payload:
+        elif command == '!sd':
             await self.sd_handler(message, payload)
         elif command == '!queue':
-            await self.queue_handler(message, payload)
+            if payload:
+                if admin:
+                    await self.queue_handler(message, payload)
+                else:
+                    await message.channel.send('Only admins can !queue others')
+            else:
+                await self.queue_handler(message)
+
         elif command == '!leave':
-            await self.leave_handler(message, payload)
+            if payload:
+                if admin:
+                    await self.leave_handler(message, payload)
+                else:
+                    await message.channel.send('Only admins can !leave others')
+            else:
+                await self.leave_handler(message)
+
         elif command == '!show':
             await self.show_queue_handler(message)
         elif command == '!pop' and payload[0]:
-            await self.pop_queue_handler(message, payload)
+            if admin:
+                await self.pop_queue_handler(message, payload)
+            else:
+                await message.channel.send('!pop is an admin command')
         elif command == '!help':
             await self.help_handler(message)
         elif len(message.attachments) == 0:
@@ -406,18 +426,28 @@ class Client(discord.Client):
         Client.player_queue, people = Client.player_queue[delim:], Client.player_queue[:delim]
         msg = ''
         for n in range(len(people)-1):
-            msg += people[n] + ', '
-        msg += people[-1]
+            msg += people[n][0] + ', '
+        if len(people) > 0:
+            msg += people[-1][0]
         await message.channel.send('Popped: ' + msg)
         await Client.show_queue_handler(message)
 
     @staticmethod
     async def show_queue_handler(message):
         msg = '```'
-
+        t1 = time.time()
         if len(Client.player_queue):
             for n in range(len(Client.player_queue)):
-                msg += str(n+1) + '  ' + str(Client.player_queue[n]) + '\n'
+                entry = Client.player_queue[n]
+                name, t0 = entry
+                t = t1-t0
+                hours = int(t // 3600)
+                t -= hours * 3600
+                mins = int(t // 60)
+                t -= mins*60
+                secs = round(t)
+                t_msg = str(hours) + 'h ' + str(mins) + 'm ' + str(secs) + 's'
+                msg += str(n+1).ljust(3) + '  ' + name.ljust(14) + t_msg + '\n'
         else:
             msg += 'Empty'
         msg += '```'
@@ -426,22 +456,29 @@ class Client(discord.Client):
     @staticmethod
     async def leave_handler(message, payload = None):
         if payload is None:
-            payload = [str(message.author)]
+            payload = [str(message.author.name)]
         name = payload[0]
-        try:
-            Client.player_queue.remove(name)
-            await Client.show_queue_handler(message)
-        except ValueError:
-            await message.channel.send(name + ' not found in queue.')
+        for n in range(len(Client.player_queue)):
+            if Client.player_queue[n][0] == name:
+                del Client.player_queue[n]
+                await Client.show_queue_handler(message)
+                return
+        
+        await message.channel.send(name + ' not found in queue.')
 
     @staticmethod
     async def queue_handler(message, payload = None):
         if payload is None:
-            name = str(message.author)
+            name = str(message.author.name)
         else:
             name = payload[0]
-        if name not in Client.player_queue:
-            Client.player_queue += [name]
+        exists = False
+        for entry in Client.player_queue:
+            if entry[0] == name:
+                exists = True
+        if not exists:
+            Client.player_queue += [(name, time.time())]
+            
         await Client.show_queue_handler(message)
 
     @staticmethod
@@ -469,8 +506,11 @@ class Client(discord.Client):
             await message.channel.send(t1.rv)
 
     @staticmethod
-    async def sd_handler(message: discord.message.Message, payload):
-        name = payload[0]
+    async def sd_handler(message: discord.message.Message, payload = None):
+        if payload == None:
+            name = str(message.author.name)
+        else:
+            name = payload[0]
 
         t1 = ThreadAnything(get_player_from_db, (name,))
         t1.start()
