@@ -504,6 +504,10 @@ class Client(discord.Client):
 
     @staticmethod
     async def replay_handler(message: discord.message.Message, data):
+        if message.author in Client.replay_queue:
+            await message.channel.send('!confirm or !discard your previous upload {0.author.mention}'.format(message))
+            return
+
         status_queue = queue.Queue()
         status = Status()
         t1 = ThreadAnything(decompress_parse_db_replay, (data,), status=status, status_queue=status_queue)
@@ -527,6 +531,8 @@ class Client(discord.Client):
                 await message.channel.send('Not complete or not a dota game.')
         else:
             await message.channel.send(t1.rv)
+
+        del Client.replay_queue[message.author]
 
     @staticmethod
     async def confirm_replay_handler(message: discord.message.Message, payload = None):
