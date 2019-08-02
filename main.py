@@ -364,41 +364,42 @@ class Client(discord.Client):
 
         author = message.author
         roles = [role.name for role in author.roles]
-        admin = ('admin' in roles) or ('development' in roles)
+        admin = ('Admin' in roles) or ('Development' in roles)
         messager = Message(message.channel)
-        if command == '!timer' and payload:
-            await self.timer_handler(message, payload)
-        elif command == '!sd':
+        if command == '!sd':
             await self.sd_handler(message, payload)
-        elif command == '!queue':
-            if payload:
-                if admin:
-                    await self.queue_handler(message, payload)
-                else:
-                    await message.channel.send('Only admins can !queue others')
-            else:
-                await self.queue_handler(message)
+        #elif command == '!timer' and payload:
+        #    await self.timer_handler(message, payload)
+        #
+        #elif command == '!queue':
+        #    if payload:
+        #        if admin:
+        #            await self.queue_handler(message, payload)
+        #        else:
+        #            await message.channel.send('Only admins can !queue others')
+        #    else:
+        #        await self.queue_handler(message)
 
-        elif command == '!leave':
-            if payload:
-                if admin:
-                    await self.leave_handler(message, payload)
-                else:
-                    await message.channel.send('Only admins can !leave others')
-            else:
-                await self.leave_handler(message)
+        #elif command == '!leave':
+        #    if payload:
+        #        if admin:
+        #            await self.leave_handler(message, payload)
+        #        else:
+        #            await message.channel.send('Only admins can !leave others')
+        #    else:
+        #        await self.leave_handler(message)
 
-        elif command == '!show':
-            await self.show_queue_handler(message)
-        elif command == '!pop' and payload[0]:
-            if admin:
-                await self.pop_queue_handler(message, payload)
-            else:
-                await message.channel.send('!pop is an admin command')
-        elif command == '!help':
-            await self.help_handler(message)
+        #elif command == '!show':
+        #    await self.show_queue_handler(message)
+        #elif command == '!pop' and payload[0]:
+        #    if admin:
+        #        await self.pop_queue_handler(message, payload)
+        #    else:
+        #        await message.channel.send('!pop is an admin command')
+        #elif command == '!help':
+        #    await self.help_handler(message)
         elif len(message.attachments) == 0:
-            await message.channel.send('!help or upload a replay.')
+            await message.channel.send('!sd name')
         
         for attachment in message.attachments:
             if attachment.filename[-4:] == '.w3g':
@@ -409,14 +410,14 @@ class Client(discord.Client):
 
     @staticmethod
     async def help_handler(message):
-        commands = ['!sd name', '!timer t', '!help']
-        queue_commands = ['!queue name', '!leave name', '!show', '!pop amount']
+        commands = ['!sd name', '!help']
+        #queue_commands = ['!queue name', '!leave name', '!show', '!pop amount']
         msg = '```'
         for command in commands:
             msg += command + '\n'
-        msg += 'Queue commands (beta: possible to queue others):\n'
-        for command in queue_commands:
-            msg += command + '\n'
+        #msg += 'Queue commands (beta: possible to queue others):\n'
+        #for command in queue_commands:
+        #    msg += command + '\n'
         msg += '```'
         await message.channel.send(msg)
 
