@@ -341,6 +341,8 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
         elif status.request is 'confirm':
             break
 
+    status_queue.put("Uploading to db..")
+
     save_file(replay, md5)
     # for new_db_entries
     for db_entry in new_db_entries:
@@ -418,9 +420,9 @@ class Client(discord.Client):
         #        await message.channel.send('!pop is an admin command')
         #elif command == '!help':
         #    await self.help_handler(message)
-        elif len(message.attachments) == 0:
-            await message.channel.send('!sd name')
-        
+        #elif len(message.attachments) == 0:
+        #    await message.channel.send('!sd name')
+        #
         for attachment in message.attachments:
             if attachment.filename[-4:] == '.w3g':
                 data = requests.get(attachment.url).content
