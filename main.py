@@ -112,16 +112,19 @@ class TimerException(Exception):
 def timer(t, status=None):
     while t > 0:
         t -= 1
-        status.progress = t
-        time.sleep(3)
-        raise TimerException
+        if status:
+            status.progress = t
+            if status.request == 'stop':
+                return 'timer stopped'
+        time.sleep(1)
+        #raise TimerException
     return 42
 
 
 class Status:
     def __init__(self):
         self.progress = None
-
+        self.request = None
 
 class ThreadAnything(threading.Thread):
     def __init__(self, func, args, status=None, status_queue=None):
@@ -249,7 +252,7 @@ def strwidth(name: str, width, *args):
     return string
 
 
-def decompress_parse_db_replay(replay, status_queue: queue.Queue):
+def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue):
     status_queue.put('Attempting to decompress..')
     data = decompress_replay(replay)
     dota_players, winner, mins, secs = get_dota_w3mmd_stats(data)
@@ -259,8 +262,6 @@ def decompress_parse_db_replay(replay, status_queue: queue.Queue):
     md5 = get_hash(stats_bytes)
     if check_if_replay_exists(md5):
         return "Replay already uploaded"
-    else:
-        save_file(replay, md5)
 
     team1 = []
     team2 = []
@@ -309,15 +310,7 @@ def decompress_parse_db_replay(replay, status_queue: queue.Queue):
         db_entry.avgcskills = db_entry.cskills / db_entry.games
         db_entry.avgcsdenies = db_entry.csdenies / db_entry.games
 
-    status_queue.put('Trying to put into db..')
 
-    # for new_db_entries
-    for db_entry in new_db_entries:
-        add_new_player_to_db(db_entry)
-
-    # for old_db_entries
-    for db_entry in old_db_entries:
-        update_dota_player_in_db(db_entry)
 
     # structure statistics return message
     winner = ['Sentinel', 'Scourge'][winner-1]
@@ -338,12 +331,33 @@ def decompress_parse_db_replay(replay, status_queue: queue.Queue):
 
     msg += "```"
 
-    return msg
+    msg += "!confirm or !discard"
+    status_queue.put(msg)
+
+    while True:
+        time.sleep(1)
+        if status.request is 'discard':
+            return "Discarded the replay."
+        elif status.request is 'confirm':
+            break
+
+    save_file(replay, md5)
+    # for new_db_entries
+    for db_entry in new_db_entries:
+        add_new_player_to_db(db_entry)
+
+    # for old_db_entries
+    for db_entry in old_db_entries:
+        update_dota_player_in_db(db_entry)
+
+    return "Replay uploaded to db."
 
 
 class Client(discord.Client):
 
     player_queue = []
+    timer_queue = {}
+    replay_queue = {}
 
     async def on_ready(self):
         print('Logged on as', self.user)
@@ -368,8 +382,14 @@ class Client(discord.Client):
         messager = Message(message.channel)
         if command == '!sd':
             await self.sd_handler(message, payload)
-        #elif command == '!timer' and payload:
-        #    await self.timer_handler(message, payload)
+        elif command == '!timer' and payload:
+            await self.timer_handler(message, payload)
+        elif command == '!timerstop':
+            await self.timer_stop_handler(message, payload)
+        elif command == '!confirm':
+            await self.confirm_replay_handler(message, payload)
+        elif command == '!discard':
+            await self.discard_replay_handler(message, payload)
         #
         #elif command == '!queue':
         #    if payload:
@@ -485,7 +505,9 @@ class Client(discord.Client):
     @staticmethod
     async def replay_handler(message: discord.message.Message, data):
         status_queue = queue.Queue()
-        t1 = ThreadAnything(decompress_parse_db_replay, (data,), status_queue=status_queue)
+        status = Status()
+        t1 = ThreadAnything(decompress_parse_db_replay, (data,), status=status, status_queue=status_queue)
+        Client.replay_queue[message.author] = (t1, status)
         t1.start()
 
         while t1.is_alive():
@@ -505,6 +527,18 @@ class Client(discord.Client):
                 await message.channel.send('Not complete or not a dota game.')
         else:
             await message.channel.send(t1.rv)
+
+    @staticmethod
+    async def confirm_replay_handler(message: discord.message.Message, payload = None):
+        if message.author in Client.replay_queue:
+            t1, status = Client.replay_queue[message.author]
+            status.request = 'confirm'
+
+    @staticmethod
+    async def discard_replay_handler(message: discord.message.Message, payload = None):
+        if message.author in Client.replay_queue:
+            t1, status = Client.replay_queue[message.author]
+            status.request = 'discard'
 
     @staticmethod
     async def sd_handler(message: discord.message.Message, payload = None):
@@ -540,7 +574,9 @@ class Client(discord.Client):
         t = int(payload[0])
 
         status = Status()
+
         t1 = ThreadAnything(timer, (t,), status)
+        Client.timer_queue[message.author] = (t1, status)
         t1.start()
 
         response = Message(message.channel)
@@ -557,6 +593,11 @@ class Client(discord.Client):
         else:
             await response.send(t1.rv)
 
+    @staticmethod
+    async def timer_stop_handler(message: discord.message.Message, payload):
+        if message.author in Client.timer_queue:
+            t1, status = Client.timer_queue[message.author]
+            status.request = 'stop'
 
 client = Client()
 client.run(keys.TOKEN)
