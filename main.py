@@ -551,7 +551,7 @@ class Client(discord.Client):
     @staticmethod
     async def sd_handler(message: discord.message.Message, payload = None):
         if payload == None:
-            name = str(message.author.name)
+            name = str(message.author.display_name)
         else:
             name = payload[0]
 
