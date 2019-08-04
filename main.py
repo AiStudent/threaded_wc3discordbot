@@ -310,8 +310,6 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
         db_entry.avgcskills = db_entry.cskills / db_entry.games
         db_entry.avgcsdenies = db_entry.csdenies / db_entry.games
 
-
-
     # structure statistics return message
     winner = ['Sentinel', 'Scourge'][winner-1]
     msg = "```Winner: " + winner + ', ' + str(mins) + 'm, ' + str(secs) + 's, elo ratio (' +\
@@ -359,7 +357,7 @@ class Client(discord.Client):
 
     player_queue = []
     timer_queue = {}
-    replay_queue = {}
+    current_replay_upload = None
 
     async def on_ready(self):
         print('Logged on as', self.user)
@@ -490,7 +488,7 @@ class Client(discord.Client):
         await message.channel.send(name + ' not found in queue.')
 
     @staticmethod
-    async def queue_handler(message, payload = None):
+    async def queue_handler(message, payload=None):
         if payload is None:
             name = str(message.author.name)
         else:
@@ -506,14 +504,16 @@ class Client(discord.Client):
 
     @staticmethod
     async def replay_handler(message: discord.message.Message, data):
-        if message.author in Client.replay_queue:
-            await message.channel.send('!confirm or !discard your previous upload {0.author.mention}'.format(message))
+
+        if Client.current_replay_upload:
+            author = Client.current_replay_upload[0]
+            await message.channel.send('{0.mention} !confirm or !discard previous replay'.format(author))
             return
 
         status_queue = queue.Queue()
         status = Status()
         t1 = ThreadAnything(decompress_parse_db_replay, (data,), status=status, status_queue=status_queue)
-        Client.replay_queue[message.author] = (t1, status)
+        Client.current_replay_upload = (message.author, t1, status)
         t1.start()
 
         while t1.is_alive():
@@ -534,23 +534,23 @@ class Client(discord.Client):
         else:
             await message.channel.send(t1.rv)
 
-        del Client.replay_queue[message.author]
+        Client.current_replay_upload = None
 
     @staticmethod
-    async def confirm_replay_handler(message: discord.message.Message, payload = None):
-        if message.author in Client.replay_queue:
-            t1, status = Client.replay_queue[message.author]
+    async def confirm_replay_handler(message: discord.message.Message, payload=None):
+        if message.author in Client.current_replay_upload:
+            _, _, status = Client.current_replay_upload
             status.request = 'confirm'
 
     @staticmethod
-    async def discard_replay_handler(message: discord.message.Message, payload = None):
-        if message.author in Client.replay_queue:
-            t1, status = Client.replay_queue[message.author]
+    async def discard_replay_handler(message: discord.message.Message, payload=None):
+        if message.author in Client.current_replay_upload:
+            _, _, status = Client.current_replay_upload
             status.request = 'discard'
 
     @staticmethod
-    async def sd_handler(message: discord.message.Message, payload = None):
-        if payload == None:
+    async def sd_handler(message: discord.message.Message, payload=None):
+        if payload is None:
             name = str(message.author.display_name)
         else:
             name = payload[0]
