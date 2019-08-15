@@ -2,7 +2,8 @@ import threading
 import time
 import discord
 import asyncio
-import pymysql
+
+from mysql import commit, fetchall, fetchone, get_player
 import keys
 import requests
 import hashlib
@@ -15,93 +16,6 @@ from w3gtest.dota_stats import NotCompleteGame
 from w3gtest.dota_stats import DotaPlayer
 from elo import teams_update_elo, team_win_elos, avg_team_elo
 
-
-def connect_to_db():
-    connection = pymysql.connect(
-        host=keys.dbhost,
-        user=keys.dbuser,
-        password=keys.dbpass,
-        db=keys.db,
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor)
-    return connection
-
-
-def get_player_from_db(name):
-    try:
-        connection = connect_to_db()
-        with connection.cursor() as cursor:
-            sql = "SELECT * FROM playerstats WHERE name = %s"
-            cursor.execute(sql, (name.lower(),))
-            result = cursor.fetchone()
-        connection.close()
-    finally:
-        pass
-    return result
-
-
-def add_new_player_to_db(db_entry):
-    try:
-        connection = connect_to_db()
-
-        with connection.cursor() as cursor:
-            sql = "INSERT INTO playerstats (name, elo, games, wins, \
-            loss, kills, deaths, assists, cskills, csdenies, avgkills, \
-            avgdeaths, avgassists, avgcskills, avgcsdenies) VALUES \
-            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-            cursor.execute(sql,  (db_entry.name.lower(),
-                                  float(db_entry.elo),
-                                  db_entry.games,
-                                  db_entry.wins,
-                                  db_entry.loss,
-                                  db_entry.kills,
-                                  db_entry.deaths,
-                                  db_entry.assists,
-                                  db_entry.cskills,
-                                  db_entry.csdenies,
-                                  db_entry.avgkills,
-                                  db_entry.avgdeaths,
-                                  db_entry.avgassists,
-                                  db_entry.avgcskills,
-                                  db_entry.avgcsdenies
-                                  ))
-            connection.commit()
-
-        connection.close()
-    finally:
-        pass
-
-
-def update_dota_player_in_db(db_entry):
-    try:
-        connection = connect_to_db()
-        with connection.cursor() as cursor:
-            sql = "UPDATE playerstats SET elo=%s, games=%s, wins=%s, \
-            loss=%s, kills=%s, deaths=%s, assists=%s, cskills=%s, csdenies=%s, \
-            avgkills=%s, avgdeaths=%s, avgassists=%s, avgcskills=%s, \
-            avgcsdenies=%s where name=%s"
-            cursor.execute(
-                sql,
-                (
-                    float(db_entry.elo),
-                    db_entry.games,
-                    db_entry.wins,
-                    db_entry.loss,
-                    db_entry.kills,
-                    db_entry.deaths,
-                    db_entry.assists,
-                    db_entry.cskills,
-                    db_entry.csdenies,
-                    db_entry.avgkills,
-                    db_entry.avgdeaths,
-                    db_entry.avgassists,
-                    db_entry.avgcskills,
-                    db_entry.avgcsdenies,
-                    db_entry.name.lower()))
-            connection.commit()
-        connection.close()
-    finally:
-        pass
 
 
 # A function in another file
@@ -269,7 +183,7 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     new_db_entries = []
     old_db_entries = []
     for dota_player in dota_players:
-        db_entry = get_player_from_db(dota_player.name)
+        db_entry = None #get_player_from_db(dota_player.name)
         if db_entry is None:
             db_entry = DBEntry(dota_player)
             new_db_entries += [db_entry]
@@ -344,11 +258,11 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     save_file(replay, md5)
     # for new_db_entries
     for db_entry in new_db_entries:
-        add_new_player_to_db(db_entry)
+        pass #add_new_player_to_db(db_entry)
 
     # for old_db_entries
     for db_entry in old_db_entries:
-        update_dota_player_in_db(db_entry)
+        pass #update_dota_player_in_db(db_entry)
 
     return "Replay uploaded to db."
 
@@ -555,7 +469,7 @@ class Client(discord.Client):
         else:
             name = payload[0]
 
-        t1 = ThreadAnything(get_player_from_db, (name,))
+        t1 = ThreadAnything(get_player, (name,))
         t1.start()
 
         response = Message(message.channel)
@@ -568,12 +482,13 @@ class Client(discord.Client):
             raise t1.exception
 
         if t1.rv:
-            db_entry = DBEntry(t1.rv)
-            await response.send(
+            #db_entry = DBEntry(t1.rv)
+            await response.send(str(t1.rv))
+            """await response.send(
                 "Stats for " + name + ': ' + str(round(db_entry.elo, 1)) + ' elo, ' +
                 'W/L ' + slash_delimited(db_entry.wins, db_entry.loss) + ', avg KDA ' +
                 slash_delimited(round(db_entry.avgkills,1), round(db_entry.avgdeaths,1), round(db_entry.avgassists,1))
-            )
+            )"""
         else:
             await response.send('No stats on ' + name)
 
