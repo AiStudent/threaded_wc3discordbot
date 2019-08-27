@@ -2,21 +2,23 @@ import threading
 import time
 import discord
 import asyncio
-
-from mysql import commit, fetchall, fetchone, get_player
+from datetime import datetime
+from mysql import get_player, insert_player, insert_game, update_player, insert_player_game, get_game
+from mysql import fetchall, commit, update_game, get_player_id, update_player_game
 import keys
 import requests
 import hashlib
 import queue
-from pathlib import Path
 from w3gtest.decompress import decompress_replay
 from w3gtest.decompress import CouldNotDecompress
 from w3gtest.dota_stats import get_dota_w3mmd_stats
 from w3gtest.dota_stats import NotCompleteGame
 from w3gtest.dota_stats import DotaPlayer
 from elo import teams_update_elo, team_win_elos, avg_team_elo
-
-
+from elo import avg_team_elo_dict, team_win_elos_dict
+import fnmatch
+import os
+import pymysql
 
 # A function in another file
 class TimerException(Exception):
@@ -104,24 +106,30 @@ def get_hash(data):
 
 
 def check_if_replay_exists(md5):
-    file_path = Path('replays/'+md5+'.w3g')
-    return file_path.is_file()
+    for file in os.listdir('replays'):
+        if fnmatch.fnmatch(file, '*' + md5 + '*.w3g'):
+            return True
+    return False
 
 
-def save_file(data, md5):
-    f = open('replays/'+md5+'.w3g', 'wb')
+def save_file(data, filename):
+    f = open('replays/'+filename+'.w3g', 'wb')
     f.write(data)
     f.close()
 
 
 class DBEntry:
     def __init__(self, de):
+        self.dota_player = None
+        self.old_elo = None
         if isinstance(de, dict):
+            self.player_id = de['player_id']
             self.name = de['name']
             self.elo = de['elo']
             self.games = de['games']
             self.wins = de['wins']
             self.loss = de['loss']
+            self.draw = de['draw']
             self.kills = de['kills']
             self.deaths = de['deaths']
             self.assists = de['assists']
@@ -133,11 +141,13 @@ class DBEntry:
             self.avgcskills = de['avgcskills']
             self.avgcsdenies = de['avgcsdenies']
         if isinstance(de, DotaPlayer):
+            self.player_id = None
             self.name = de.name
             self.elo = 1000.0
             self.games = 0
             self.wins = 0
             self.loss = 0
+            self.draw = 0
             self.kills = 0
             self.deaths = 0
             self.assists = 0
@@ -149,6 +159,28 @@ class DBEntry:
             self.avgcskills = 0.0
             self.avgcsdenies = 0.0
 
+    def get_hm(self):
+        hm = {
+            'name': self.name,
+            'elo': self.elo,
+            'games': self.games,
+            'wins': self.wins,
+            'loss': self.loss,
+            'draw': self.draw,
+            'kills': self.kills,
+            'deaths': self.deaths,
+            'assists': self.assists,
+            'cskills': self.cskills,
+            'csdenies': self.csdenies,
+            'avgkills': self.avgkills,
+            'avgdeaths': self.avgdeaths,
+            'avgassists': self.avgassists,
+            'avgcskills': self.avgcskills,
+            'avgcsdenies': self.avgcsdenies
+        }
+        if self.player_id:
+            hm['player_id'] = self.player_id
+        return hm
 
 def slash_delimited(*args):
     string = '('
@@ -166,16 +198,22 @@ def strwidth(name: str, width, *args):
     return string
 
 
+def sd_player(name):
+    p = get_player(name)
+    return name + ': ' + str(round(p['elo'], 1)) + ' elo, ' + \
+        'W/L ' + slash_delimited(p['wins'], p['loss']) + ', avg KDA ' + \
+        slash_delimited(round(p['avgkills'],1), round(p['avgdeaths'],1), round(p['avgassists'],1))
+
 def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue):
     status_queue.put('Attempting to decompress..')
     data = decompress_replay(replay)
-    dota_players, winner, mins, secs = get_dota_w3mmd_stats(data)
+    dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
 
     # check if already uploaded
     stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
     md5 = get_hash(stats_bytes)
-    if check_if_replay_exists(md5):
-        return "Replay already uploaded"
+    #if check_if_replay_exists(md5):
+    #    return "Replay already uploaded"
 
     team1 = []
     team2 = []
@@ -183,13 +221,16 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     new_db_entries = []
     old_db_entries = []
     for dota_player in dota_players:
-        db_entry = None #get_player_from_db(dota_player.name)
+        dota_player.name = dota_player.name.lower()
+        db_entry = get_player(dota_player.name) #get_player_from_db(dota_player.name)
         if db_entry is None:
             db_entry = DBEntry(dota_player)
             new_db_entries += [db_entry]
         else:
             db_entry = DBEntry(db_entry)
             old_db_entries += [db_entry]
+
+        db_entry.old_elo = db_entry.elo
 
         if dota_player.team == 1:
             team1 += [db_entry]
@@ -202,7 +243,7 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     team1_win_elo_inc, team2_win_elo_inc = team_win_elos(team1, team2)
     team1_avg_elo, team2_avg_elo = avg_team_elo(team1), avg_team_elo(team2)
 
-    teams_update_elo(team1, team2, winner)
+    t1_elo_change, t2_elo_change = teams_update_elo(team1, team2, winner)
 
     # add up stats
     for n in range(len(dota_players)):  # same order as before
@@ -213,6 +254,7 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
             db_entry.wins += 1
         else:
             db_entry.loss += 1
+        db_entry.dota_player = dota_player
         db_entry.kills += dota_player.kills
         db_entry.deaths += dota_player.deaths
         db_entry.assists += dota_player.assists
@@ -229,15 +271,15 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     msg = "```Winner: " + winner + ', ' + str(mins) + 'm, ' + str(secs) + 's, elo ratio (' +\
           str(round(team1_win_elo_inc, 1)) + '/' + str(round(team2_win_elo_inc, 1)) + ')\n'
 
-    team1 = [dota_player for dota_player in dota_players if dota_player.team == 1]
-    team2 = [dota_player for dota_player in dota_players if dota_player.team == 2]
+    team1_dp = [dota_player for dota_player in dota_players if dota_player.team == 1]
+    team2_dp = [dota_player for dota_player in dota_players if dota_player.team == 2]
 
     msg += 'sentinel avg elo: ' + str(round(team1_avg_elo, 1)) + '\n'
-    for dota_player in team1:
+    for dota_player in team1_dp:
         msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
                         dota_player.deaths, 4, dota_player.assists, 4) + '\n'
     msg += 'scourge avg elo: ' + str(round(team2_avg_elo, 1)) + '\n'
-    for dota_player in team2:
+    for dota_player in team2_dp:
         msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
                         dota_player.deaths, 4, dota_player.assists, 4) + '\n'
 
@@ -255,16 +297,245 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
 
     status_queue.put("Uploading to db..")
 
-    save_file(replay, md5)
-    # for new_db_entries
-    for db_entry in new_db_entries:
-        pass #add_new_player_to_db(db_entry)
+    date_and_time = datetime.now().strftime("%Y%m%d_%Hh%Mm%Ss")
+    save_file(replay, date_and_time + '_' + md5)
 
-    # for old_db_entries
-    for db_entry in old_db_entries:
-        pass #update_dota_player_in_db(db_entry)
+    try:
+        game_entry = insert_game(
+            {   'mode': mode,
+                'winner': winner,
+                'duration': (60*mins+secs),
+                'upload_time': date_and_time,
+                'hash': md5,
+                'ranked': 1,
+                'team1_elo': team1_avg_elo,
+                'team2_elo': team2_avg_elo,
+                'team1_elo_change': t1_elo_change,
+                'elo_alg': '1.0'
+            }
+        )
 
-    return "Replay uploaded to db."
+        game_id = game_entry['LAST_INSERT_ID()']
+
+        # for new_db_entries
+        for db_entry in new_db_entries:
+            response = insert_player(db_entry.get_hm())
+            db_entry.player_id = response['LAST_INSERT_ID()']
+
+        for db_entry in new_db_entries + old_db_entries:
+            insert_player_game({
+                'player_id': db_entry.player_id,
+                'game_id': game_id,
+                'slot_nr': db_entry.dota_player.slot_order, #until blizzard fixes slot_nr
+                'elo_before': db_entry.old_elo,
+                'kills': db_entry.dota_player.kills,
+                'deaths': db_entry.dota_player.deaths,
+                'assists': db_entry.dota_player.assists,
+                'cskills': db_entry.dota_player.cskills,
+                'csdenies': db_entry.dota_player.csdenies
+            })
+
+        # for old_db_entries
+        for db_entry in old_db_entries:
+            update_player(db_entry.get_hm(), 'player_id')
+
+    except pymysql.err.IntegrityError as e:
+        return str(e)
+
+    return "Replay uploaded to db. Game ID: " + str(game_id)
+
+
+def format_fields(hms, fields):
+    msg = "```"
+    for field in fields:
+        msg += field + "\t"
+    msg += '\n'
+    for hm in hms:
+        for field in fields:
+            value = hm[field]
+            if type(value) == float:
+                msg += str(round(value,1))
+            else:
+                msg += str(value)
+            msg += "\t"
+        msg += '\n'
+    msg += "```"
+    return msg
+
+
+def list_last_games(nr):
+    sql = "select game_id, mode, ranked, upload_time from games order by game_id ASC limit %s"
+    rows = fetchall(sql, (nr,))
+    fields = ['game_id', 'mode', 'ranked', 'upload_time']
+    msg = format_fields(rows, fields)
+    return msg
+
+
+def rank_game(game_id):
+    game = get_game(game_id)
+    if game is None:
+        return 'Game nr' + str(game_id) + ' not found'
+    if game['ranked'] == 1:
+        return 'Game nr: ' + str(game_id) + ' is already ranked'
+
+    #roll back
+    sql = "select * from games where game_id>=%s AND ranked=1 ORDER BY game_id DESC;"
+    games = fetchall(sql, (game_id))
+    for g in games:
+        reset_stats_of_latest_game(g['game_id'])
+
+    game['ranked'] = 1
+    update_game(game)
+
+    # ignore current game and recalculate for all after
+    recalculate_elo_from_game(game_id)
+
+    return "done"
+
+def unrank_game(game_id):
+    # mysql unrank
+    game = get_game(game_id)
+    if game is None:
+        return 'Game nr' + str(game_id) + ' not found'
+    if game['ranked'] != 1:
+        return 'Game nr: ' + str(game_id) + ' is not ranked'
+
+    sql = "select * from games where game_id>=%s AND ranked=1 ORDER BY game_id DESC;"
+    games = fetchall(sql, (game_id))
+    for g in games:
+        reset_stats_of_latest_game(g['game_id'])
+
+    game['ranked'] = 0
+    update_game(game)
+
+    recalculate_elo_from_game(game_id)
+
+    return "done"
+
+
+def recalculate_elo_from_game(game_id):
+    sql = "select * from games where game_id>=%s AND ranked=1 ORDER BY game_id ASC;"
+    games = fetchall(sql, (game_id))
+
+    n = 0
+    for game in games:
+        # check winner
+        winner = game['winner']
+
+        # get pgs
+        sql = "select * from player_game where game_id=%s"
+        pgs = fetchall(sql, (game['game_id']))
+
+        # get total player elo (assume updated)
+        team1 = []
+        team2 = []
+
+        # add pg stats to player
+        for pg in pgs:
+            p = get_player_id(pg['player_id'])
+            if pg['slot_nr'] < 5:
+                team1 += [p]
+                if winner == 'Sentinel':
+                    p['wins'] += 1
+                else:
+                    p['loss'] += 1
+            else:
+                team2 += [p]
+                if winner == 'Scourge':
+                    p['wins'] += 1
+                else:
+                    p['loss'] += 1
+
+            pg['elo_before'] = p['elo']
+            update_player_game(pg)
+            p['games'] += 1
+            p['kills'] += pg['kills']
+            p['deaths'] += pg['deaths']
+            p['assists'] += pg['assists']
+            p['cskills'] += pg['cskills']
+            p['csdenies'] += pg['csdenies']
+            p['avgkills'] = p['kills'] / p['games']
+            p['avgdeaths'] = p['deaths'] / p['games']
+            p['avgassists'] = p['assists'] / p['games']
+            p['avgcskills'] = p['avgcskills'] / p['games']
+            p['avgcsdenies'] = p['avgcsdenies'] / p['games']
+
+        # set game teams avg elo
+        team1_avg_elo = avg_team_elo_dict(team1)
+        team2_avg_elo = avg_team_elo_dict(team2)
+        game['team1_elo'] = team1_avg_elo
+        game['team2_elo'] = team2_avg_elo
+
+        # elo calculation
+        team1_win_elo, team2_win_elo = team_win_elos_dict(team1_avg_elo, team2_avg_elo)
+
+        # set game teams_elo_change
+        if winner == 'Sentinel':
+            game['team1_elo_change'] = team1_win_elo
+            for p in team1:
+                p['elo'] += team1_win_elo
+            for p in team2:
+                p['elo'] -= team1_win_elo
+        else:
+            game['team1_elo_change'] = -team2_win_elo
+            for p in team1:
+                p['elo'] -= team2_win_elo
+            for p in team2:
+                p['elo'] += team2_win_elo
+
+
+        update_game(game)
+        for p in team1+team2:
+            update_player(p)
+
+        n += 1
+
+def reset_stats_of_latest_game(game_id):
+    # get game
+    game = get_game(game_id)
+    game['team1_elo'] = 0
+    game['team2_elo'] = 0
+    game['team1_elo_change'] = 0
+    update_game(game)
+    # undo stuff
+    # pg -> p
+    sql = "select * from player_game where game_id=%s"
+    pgs = fetchall(sql, game_id)
+    for pg in pgs:
+        p = get_player_id(pg['player_id'])
+        if game['winner'] == 'Sentinel':
+            if pg['slot_nr'] < 5:
+                p['wins'] -= 1
+            else:
+                p['loss'] -= 1
+        else:
+            if pg['slot_nr'] >= 5:
+                p['wins'] -= 1
+            else:
+                p['loss'] -= 1
+
+        p['games'] -= 1
+
+        p['elo'] = pg['elo_before']
+        p['kills'] -= pg['kills']
+        p['deaths'] -= pg['deaths']
+        p['assists'] -= pg['assists']
+        p['cskills'] -= pg['cskills']
+        p['csdenies'] -= pg['csdenies']
+        if p['games'] > 0:
+            p['avgkills'] = p['kills'] / p['games']
+            p['avgdeaths'] = p['deaths'] / p['games']
+            p['avgassists'] = p['assists'] / p['games']
+            p['avgcskills'] = p['avgcskills'] / p['games']
+            p['avgcsdenies'] = p['avgcsdenies'] / p['games']
+        else:
+            p['avgkills'] = 0
+            p['avgdeaths'] = 0
+            p['avgassists'] = 0
+            p['avgcskills'] = 0
+            p['avgcsdenies'] = 0
+        update_player(p)
+
 
 
 class Client(discord.Client):
@@ -304,7 +575,16 @@ class Client(discord.Client):
             await self.confirm_replay_handler(message, payload)
         elif command == '!discard':
             await self.discard_replay_handler(message, payload)
-        #
+        elif command == '!list':
+            await self.list_last_games_handler(message, payload)
+        elif command == '!cleardb':
+            await self.clear_db_handler(message)
+        elif command == '!rank' and payload:
+            await self.rank_handler(message, payload)
+        elif command == '!unrank' and payload:
+            await self.unrank_handler(message, payload)
+
+
         #elif command == '!queue':
         #    if payload:
         #        if admin:
@@ -354,6 +634,16 @@ class Client(discord.Client):
         #    msg += command + '\n'
         msg += '```'
         await message.channel.send(msg)
+
+    @staticmethod
+    async def clear_db_handler(message):
+        sql = "delete from games"
+        commit(sql, ())
+        sql = "delete from player"
+        commit(sql, ())
+        sql = "delete from player_game"
+        commit(sql, ())
+        await message.channel.send("cleared db")
 
     @staticmethod
     async def pop_queue_handler(message, payload):
@@ -469,13 +759,12 @@ class Client(discord.Client):
         else:
             name = payload[0]
 
-        t1 = ThreadAnything(get_player, (name,))
+        t1 = ThreadAnything(sd_player, (name,))
         t1.start()
 
         response = Message(message.channel)
 
         while t1.is_alive():
-            await response.send_status('Accessing db..')
             await asyncio.sleep(0.1)
 
         if t1.exception:
@@ -484,13 +773,61 @@ class Client(discord.Client):
         if t1.rv:
             #db_entry = DBEntry(t1.rv)
             await response.send(str(t1.rv))
-            """await response.send(
-                "Stats for " + name + ': ' + str(round(db_entry.elo, 1)) + ' elo, ' +
-                'W/L ' + slash_delimited(db_entry.wins, db_entry.loss) + ', avg KDA ' +
-                slash_delimited(round(db_entry.avgkills,1), round(db_entry.avgdeaths,1), round(db_entry.avgassists,1))
-            )"""
         else:
             await response.send('No stats on ' + name)
+
+    @staticmethod
+    async def list_last_games_handler(message: discord.message.Message, payload=None):
+        response = Message(message.channel)
+        if payload:
+            nr = int(payload[0])
+        else:
+            nr = 10
+
+        t1 = ThreadAnything(list_last_games, (nr,))
+        t1.start()
+
+        while t1.is_alive():
+            #await response.send_status(status.progress)
+            await asyncio.sleep(0.1)
+
+        await response.send(t1.rv)
+
+
+    @staticmethod
+    async def rank_handler(message: discord.message.Message, payload):
+        response = Message(message.channel)
+        nr = int(payload[0])
+
+        t1 = ThreadAnything(rank_game, (nr,))
+        t1.start()
+
+        while t1.is_alive():
+            #await response.send_status(status.progress)
+            await asyncio.sleep(0.1)
+
+        if t1.exception:
+            raise t1.exception
+
+        await response.send(t1.rv)
+
+
+    @staticmethod
+    async def unrank_handler(message: discord.message.Message, payload):
+        response = Message(message.channel)
+        nr = int(payload[0])
+
+        t1 = ThreadAnything(unrank_game, (nr,))
+        t1.start()
+
+        while t1.is_alive():
+            #await response.send_status(status.progress)
+            await asyncio.sleep(0.1)
+
+        if t1.exception:
+            raise t1.exception
+
+        await response.send(t1.rv)
 
     @staticmethod
     async def timer_handler(message: discord.message.Message, payload):

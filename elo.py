@@ -10,6 +10,8 @@ def prob_t1_t2_win(rating1, rating2):
 def avg_team_elo(players):
     return sum([p.elo for p in players]) / len(players)
 
+def avg_team_elo_dict(team):
+    return sum([p['elo'] for p in team]) / len(team)
 
 K = 30
 
@@ -17,6 +19,16 @@ K = 30
 def team_win_elos(team1, team2):
     r1 = avg_team_elo(team1)
     r2 = avg_team_elo(team2)
+
+    prob_t1, prob_t2 = prob_t1_t2_win(r1, r2)
+    team1_win_elo_inc = K * (1 - prob_t1)
+    team2_win_elo_inc = K - team1_win_elo_inc
+    return team1_win_elo_inc, team2_win_elo_inc
+
+
+def team_win_elos_dict(team1_avg_elo, team2_avg_elo):
+    r1 = team1_avg_elo
+    r2 = team2_avg_elo
 
     prob_t1, prob_t2 = prob_t1_t2_win(r1, r2)
     team1_win_elo_inc = K * (1 - prob_t1)
@@ -32,11 +44,13 @@ def teams_update_elo(team1, team2, winner):
             player.elo += team1_win_elo_inc
         for player in team2:
             player.elo += -team1_win_elo_inc
+        return team1_win_elo_inc, -team1_win_elo_inc
     elif winner == 2:
         for player in team1:
             player.elo += -team2_win_elo_inc
         for player in team2:
             player.elo += team2_win_elo_inc
+        return -team2_win_elo_inc, team2_win_elo_inc
     else:
         raise Exception('WhoWonException')
 

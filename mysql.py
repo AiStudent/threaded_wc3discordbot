@@ -22,6 +22,16 @@ def commit(sql, args):
     connection.close()
 
 
+def commit_and_check(sql, args):
+    connection = connect_to_db()
+    with connection.cursor() as cursor:
+        cursor.execute(sql, args)
+        cursor.execute("SELECT LAST_INSERT_ID()", ())
+        result = cursor.fetchone()
+        connection.commit()
+    connection.close()
+    return result
+
 def fetch(sql, args, one: bool):
     connection = connect_to_db()
     with connection.cursor() as cursor:
@@ -71,8 +81,14 @@ def insert_dict(table: str, dictionary: dict):
     hm = dictionary.copy()
     values = tuple([hm[key] for key in hm])
     sql = "INSERT INTO " + table + " " + keys2str(hm) + " VALUES " + values_subs(values)
-    print(sql)
     commit(sql, values)
+
+
+def insert_dict_and_check(table: str, dictionary: dict):
+    hm = dictionary.copy()
+    values = tuple([hm[key] for key in hm])
+    sql = "INSERT INTO " + table + " " + keys2str(hm) + " VALUES " + values_subs(values)
+    return commit_and_check(sql, values)
 
 
 def update_dict(table: str, game_hm: dict, where: tuple):
@@ -92,17 +108,17 @@ def update_dict(table: str, game_hm: dict, where: tuple):
 
 # -------------- usable ----------------
 # game
-def update_game(game_hm: dict, where: str):
+def update_game(game_hm: dict, where='game_id'):
     update_dict('games', game_hm, (where,))
 
 
-def get_game(hash):
-    sql = "SELECT * FROM games WHERE hash = %s"
-    return fetchone(sql, (hash,))
+def get_game(game_id):
+    sql = "SELECT * FROM games WHERE game_id = %s"
+    return fetchone(sql, (game_id,))
 
 
 def insert_game(game):
-    insert_dict('games', game)
+    return insert_dict_and_check('games', game)
 
 
 def rank_game(game_id):
@@ -119,14 +135,22 @@ def unrank_game(game_id):
 
 # player
 def insert_player(player):
-    insert_dict('player', player)
+    return insert_dict_and_check('player', player)
+
 
 def get_player(name):
     sql = "SELECT * FROM player WHERE name = %s"
     return fetchone(sql, (name,))
 
-def update_player(player: dict, where: str):
+
+def get_player_id(player_id):
+    sql = "SELECT * FROM player WHERE player_id = %s"
+    return fetchone(sql, (player_id,))
+
+
+def update_player(player: dict, where = 'player_id'):
     update_dict('player', player, (where,))
+
 
 # player game
 def insert_player_game(player_game):
@@ -137,14 +161,14 @@ def get_player_games(player_id):
     sql = "SELECT * FROM player_game WHERE player_id=%s"
     return fetchall(sql, (player_id,))
 
-# TODO
+
 def update_player_game(player_game):
     update_dict('player_game', player_game, ('player_id', 'game_id'))
 
 
 
 testplayer =         {
-            'name' : "fantom",
+            'name' : "holybear",
             'elo' : 1050.0,
             'games' : 2,
             'wins' : 1,
@@ -163,8 +187,8 @@ testplayer =         {
         }
 
 test_playergame = {
-    'player_id' : 3,
-    'game_id' : 2,
+    'player_id' : 1,
+    'game_id' : 3,
     'elo' : 1000,
     'kills' : 10,
     'deaths' : 5,
@@ -172,6 +196,17 @@ test_playergame = {
     'cskills' : 10,
     'csdenies' : 0
 }
+
+testgame = {
+            'mode': 'cdzd',
+            'winner': 1,
+            'duration': 2,
+            'upload_time': 'date..',
+            'hash': '4',
+            'ranked': 1,
+            'elo_alg': 'v1.0'
+        }
+
 
 if __name__ == '__main__':
 
@@ -195,11 +230,43 @@ if __name__ == '__main__':
     #update_player(p, 'player_id')
     #print(get_player('fantom'))
 
-    pg = get_player_games(1)[0]
-    print(pg)
-    pg['kills'] = 4
-    update_player_game(pg)
     #pg = get_player_games(1)[0]
-    pg = get_player_games(1)[0]
-    print(pg)
+    #print(pg)
+    #pg['kills'] = 4
+    #update_player_game(pg)
+    #pg = get_player_games(1)[0]
+    #pg = get_player_games(1)[0]
+    #print(pg)
 
+    #insert_player_game(test_playergame)
+    #insert_player(testplayer)
+    #insert_game(testgame)
+    # get player_id game stuff
+    sql = "select g.*, pg.* from games g, player_game pg where g.game_id=pg.game_id and pg.player_id=%s"
+    #print(fetchall(sql, (1,)))
+
+    # get all games each player was in
+    sql = "select p.name, pg.game_id from games g, player_game pg, player p where g.game_id=pg.game_id and p.player_id=pg.player_id"
+
+    sql = "insert into person (name) values ('asdasd')"
+    #print(commit_and_check(sql, ()))
+    #sql = "SELECT LAST_INSERT_ID()"
+    #print(fetchall(sql, ()))
+
+    p = get_player_games()
+
+"""
+select g.game_id, g.ranked, g.upload_time, blue.name, pink.name from
+games g, player_game bluepg, player_game pinkpg, player blue, player pink where
+g.game_id=bluepg.game_id and
+g.game_id=pinkpg.game_id and
+bluepg.slot_nr=2 and
+pinkpg.slot_nr=7 and
+blue.player_id=bluepg.player_id and
+pink.player_id=pinkpg.player_id;
+
+
+
+
+
+"""
