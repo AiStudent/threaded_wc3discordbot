@@ -85,7 +85,7 @@ class Message:
         print('>: ' + str(content))
 
     async def send_status(self, content):
-        if self.cooldown < time.time():
+        if self.cooldown < time.time() and content is not None:
             await self.send(content)
             self.cooldown = time.time() + 1
 
@@ -367,36 +367,33 @@ def format_fields(hms, fields):
 
 
 def list_last_games(nr):
-    sql = "select game_id, mode, ranked, upload_time from games order by game_id ASC limit %s"
+    sql = "select game_id, mode, ranked, upload_time from games order by upload_time ASC limit %s"
     rows = fetchall(sql, (nr,))
     fields = ['game_id', 'mode', 'ranked', 'upload_time']
     msg = format_fields(rows, fields)
     return msg
 
 
-def rank_game(game_id):
+def rank_game(game_id, status):
     game = get_game(game_id)
     if game is None:
         return 'Game nr' + str(game_id) + ' not found'
     if game['ranked'] == 1:
         return 'Game nr: ' + str(game_id) + ' is already ranked'
 
-    #roll back
-    sql = "select * from games where game_id>=%s AND ranked=1 ORDER BY game_id DESC;"
-    games = fetchall(sql, (game_id))
-    for g in games:
-        reset_stats_of_latest_game(g['game_id'])
+    upload_time = game['upload_time']
+    rollback_to(game, status=status)
 
     game['ranked'] = 1
     update_game(game)
 
     # ignore current game and recalculate for all after
-    recalculate_elo_from_game(game_id)
+    recalculate_elo_from_game(upload_time, status=status)
 
     return "done"
 
 
-def unrank_game(game_id):
+def unrank_game(game_id, status):
     # mysql unrank
     game = get_game(game_id)
     if game is None:
@@ -404,25 +401,39 @@ def unrank_game(game_id):
     if game['ranked'] != 1:
         return 'Game nr: ' + str(game_id) + ' is not ranked'
 
-    sql = "select * from games where game_id>=%s AND ranked=1 ORDER BY game_id DESC;"
-    games = fetchall(sql, (game_id))
-    for g in games:
-        reset_stats_of_latest_game(g['game_id'])
+    upload_time = game['upload_time']
+    rollback_to(game, status)
 
     game['ranked'] = 0
     update_game(game)
 
-    recalculate_elo_from_game(game_id)
+    recalculate_elo_from_game(upload_time, status=status)
 
     return "done"
 
 
-def recalculate_elo_from_game(game_id):
-    sql = "select * from games where game_id>=%s AND ranked=1 ORDER BY game_id ASC;"
-    games = fetchall(sql, (game_id))
+def rollback_to(game, status=None):
+    upload_time = game['upload_time']
+    sql = "select * from games where upload_time>=%s AND ranked=1 ORDER BY upload_time DESC;"
+    games = fetchall(sql, (upload_time))
+    n = 0
+    for g in games:
+        if status:
+            status.progress = "Rolling back.. " + slash_delimited(n, len(games))
+        reset_stats_of_latest_game(g['game_id'])
+        n += 1
+
+
+
+
+def recalculate_elo_from_game(upload_time, status=None):
+    sql = "select * from games where upload_time>=%s AND ranked=1 ORDER BY upload_time ASC;"
+    games = fetchall(sql, (upload_time))
 
     n = 0
     for game in games:
+        if status:
+            status.progress = 'Recalculating elo ' + slash_delimited(n, len(games))
         # check winner
         winner = game['winner']
 
@@ -493,6 +504,8 @@ def recalculate_elo_from_game(game_id):
             update_player(p)
 
         n += 1
+
+    status.progress = 'Recalculating elo ' + slash_delimited(n, len(games))
 
 def reset_stats_of_latest_game(game_id):
     # get game
@@ -716,7 +729,7 @@ def modify_game_upload_time(game_id, upload_time):
         return "Unrank the game before modifying upload time."
     game['upload_time'] = upload_time
     update_game(game)
-    return "Game ID: " + str(game_id) + "upload time set to " + upload_time
+    return "Game ID: " + str(game_id) + " upload time set to " + upload_time
 
 
 class Client(discord.Client):
@@ -766,7 +779,8 @@ class Client(discord.Client):
             await self.rank_handler(message, payload)
         elif command == '!unrank' and payload:
             await self.unrank_handler(message, payload)
-
+        elif command == '!setdate' and payload:
+            await self.modify_game_upload_time_handler(message, payload)
 
         #elif command == '!queue':
         #    if payload:
@@ -1016,11 +1030,12 @@ class Client(discord.Client):
         response = Message(message.channel)
         nr = int(payload[0])
 
-        t1 = ThreadAnything(rank_game, (nr,))
+        status = Status()
+        t1 = ThreadAnything(rank_game, (nr,), status=status)
         t1.start()
 
         while t1.is_alive():
-            #await response.send_status(status.progress)
+            await response.send_status(status.progress)
             await asyncio.sleep(0.1)
 
         if t1.exception:
@@ -1034,11 +1049,12 @@ class Client(discord.Client):
         response = Message(message.channel)
         nr = int(payload[0])
 
-        t1 = ThreadAnything(unrank_game, (nr,))
+        status = Status()
+        t1 = ThreadAnything(unrank_game, (nr,), status=status)
         t1.start()
 
         while t1.is_alive():
-            #await response.send_status(status.progress)
+            await response.send_status(status.progress)
             await asyncio.sleep(0.1)
 
         if t1.exception:
