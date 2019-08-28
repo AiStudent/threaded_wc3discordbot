@@ -112,6 +112,18 @@ def check_if_replay_exists(md5):
     return False
 
 
+def get_replay_name(upload_time):
+    for file in os.listdir('replays'):
+        if fnmatch.fnmatch(file, upload_time + '*.w3g'):
+            return file
+
+def change_filename(upload_time, new_upload_time):
+    filename = get_replay_name(upload_time)
+    old_file = os.path.join("replays", filename)
+    new_filename = new_upload_time + filename[len(upload_time):]
+    new_file = os.path.join("replays", new_filename)
+    os.rename(old_file, new_file)
+
 def save_file(data, filename):
     f = open('replays/'+filename+'.w3g', 'wb')
     f.write(data)
@@ -191,9 +203,19 @@ def slash_delimited(*args):
 
 
 def strwidth(name: str, width, *args):
+    name = str(name)
     string = name.ljust(width)
     for n in range(0, len(args)-2, 2):
         string += (str(args[n])+', ').rjust(args[n+1])
+    string += str(args[-2])
+    return string
+
+
+def strwidthleft(name: str, width, *args):
+    name = str(name)
+    string = name.ljust(width)
+    for n in range(0, len(args)-2, 2):
+        string += (str(args[n])+' ').ljust(args[n+1])
     string += str(args[-2])
     return string
 
@@ -213,8 +235,9 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     # check if already uploaded
     stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
     md5 = get_hash(stats_bytes)
-    #if check_if_replay_exists(md5):
-    #    return "Replay already uploaded"
+    if check_if_replay_exists(md5):
+        game = get_game(md5, 'hash')
+        return "Replay already uploaded with Game ID: " + str(game['game_id'])
 
     team1 = []
     team2 = []
@@ -301,7 +324,9 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     status_queue.put("Uploading to db..")
 
     date_and_time = datetime.now().strftime("%Y%m%d_%Hh%Mm%Ss")
-    save_file(replay, date_and_time + '_' + md5)
+    #yyyymmdd_xxhxxmxxs_complete_winner_mins_secs_hash
+    filename = date_and_time + '_complete_' + winner + '_' + str(mins) + '_' + str(secs) + '_' + md5
+    save_file(replay, filename)
 
     try:
         game_entry = insert_game(
@@ -345,32 +370,23 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     except pymysql.err.IntegrityError as e:
         return str(e)
 
+    rank_players(status)
     return "Replay uploaded to db. Game ID: " + str(game_id)
 
 
-def format_fields(hms, fields):
-    msg = "```"
-    for field in fields:
-        msg += field + "\t"
-    msg += '\n'
-    for hm in hms:
-        for field in fields:
-            value = hm[field]
-            if type(value) == float:
-                msg += str(round(value,1))
-            else:
-                msg += str(value)
-            msg += "\t"
-        msg += '\n'
-    msg += "```"
-    return msg
+
 
 
 def list_last_games(nr):
     sql = "select game_id, mode, ranked, upload_time from games order by upload_time ASC limit %s"
     rows = fetchall(sql, (nr,))
-    fields = ['game_id', 'mode', 'ranked', 'upload_time']
-    msg = format_fields(rows, fields)
+
+    msg = "```"
+    msg += strwidthleft('game_id', 10, 'ranked', 10, 'upload_time', 20) + '\n'
+
+    for row in rows:
+        msg += strwidthleft(row['game_id'], 10, row['ranked'], 10, row['upload_time'], 20) + '\n'
+    msg += '```'
     return msg
 
 
@@ -389,7 +405,7 @@ def rank_game(game_id, status):
 
     # ignore current game and recalculate for all after
     recalculate_elo_from_game(upload_time, status=status)
-
+    rank_players(status)
     return "done"
 
 
@@ -408,7 +424,7 @@ def unrank_game(game_id, status):
     update_game(game)
 
     recalculate_elo_from_game(upload_time, status=status)
-
+    rank_players(status)
     return "done"
 
 
@@ -562,8 +578,9 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
     # check if already uploaded
     stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
     md5 = get_hash(stats_bytes)
-    #if check_if_replay_exists(md5):
-    #    return "Replay already uploaded"
+    if check_if_replay_exists(md5):
+        game = get_game(md5, 'hash')
+        return "Replay already uploaded with Game ID: " + str(game['game_id'])
 
     team1 = []
     team2 = []
@@ -676,7 +693,9 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
     status_queue.put("Uploading to db..")
 
     date_and_time = datetime.now().strftime("%Y%m%d_%Hh%Mm%Ss")
-    save_file(replay, 'unfinished_' + date_and_time + '_' + md5)
+    # yyyymmdd_xxhxxmxxs_incomplete_winner_mins_secs_hash.w3g
+    filename = date_and_time + '_incomplete_' + winner + '_' + str(mins) + '_' + str(secs) + '_' + md5
+    save_file(replay, filename)
 
     try:
         game_entry = insert_game(
@@ -720,17 +739,239 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
     except pymysql.err.IntegrityError as e:
         return str(e)
 
+    rank_players(status)
     return "Replay uploaded to db. Game ID: " + str(game_id)
 
 
-def modify_game_upload_time(game_id, upload_time):
+def auto_replay_upload(replay, date_and_time, winner, mins, secs):
+    # parse
+    data = decompress_replay(replay)
+
+    try:
+        dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
+    except NotCompleteGame:
+        dota_players, mode, unparsed = parse_incomplete_game(data)
+
+    stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
+    md5 = get_hash(stats_bytes)
+
+    team1 = []
+    team2 = []
+    db_entries = []
+    new_db_entries = []
+    old_db_entries = []
+    for dota_player in dota_players:
+        dota_player.name = dota_player.name.lower()
+        db_entry = get_player(dota_player.name)
+        if db_entry is None:
+            db_entry = DBEntry(dota_player)
+            new_db_entries += [db_entry]
+        else:
+            db_entry = DBEntry(db_entry)
+            old_db_entries += [db_entry]
+
+        db_entry.old_elo = db_entry.elo
+
+        if dota_player.team == 1:
+            team1 += [db_entry]
+        elif dota_player.team == 2:
+            team2 += [db_entry]
+
+        db_entries += [db_entry]
+
+    if len(team1) != len(team2) != 5:
+        raise Exception('Not 5x5 game')
+
+    # determine elo change
+    team1_win_elo_inc, team2_win_elo_inc = team_win_elos(team1, team2)
+    team1_avg_elo, team2_avg_elo = avg_team_elo(team1), avg_team_elo(team2)
+
+    t1_elo_change, t2_elo_change = teams_update_elo(team1, team2, winner)
+
+    # add up stats
+    for n in range(len(dota_players)):
+        dota_player = dota_players[n]
+        db_entry = db_entries[n]
+        db_entry.games += 1
+        if dota_player.team == winner:
+            db_entry.wins += 1
+        else:
+            db_entry.loss += 1
+        db_entry.dota_player = dota_player
+        db_entry.kills += dota_player.kills
+        db_entry.deaths += dota_player.deaths
+        db_entry.assists += dota_player.assists
+        db_entry.cskills += dota_player.cskills
+        db_entry.csdenies += dota_player.csdenies
+        db_entry.avgkills = db_entry.kills / db_entry.games
+        db_entry.avgdeaths = db_entry.deaths / db_entry.games
+        db_entry.avgassists = db_entry.assists / db_entry.games
+        db_entry.avgcskills = db_entry.cskills / db_entry.games
+        db_entry.avgcsdenies = db_entry.csdenies / db_entry.games
+
+    # structure statistics return message
+    winner = ['Sentinel', 'Scourge'][winner - 1]
+
+    # yyyymmdd_xxhxxmxxs_incomplete_winner_mins_secs_hash.w3g
+
+    try:
+        game_entry = insert_game(
+            {'mode': mode,
+             'winner': winner,
+             'duration': (60 * mins + secs),
+             'upload_time': date_and_time,
+             'hash': md5,
+             'ranked': 1,
+             'team1_elo': team1_avg_elo,
+             'team2_elo': team2_avg_elo,
+             'team1_elo_change': t1_elo_change,
+             'elo_alg': '1.0'
+             }
+        )
+
+        game_id = game_entry['LAST_INSERT_ID()']
+
+        # for new_db_entries
+        for db_entry in new_db_entries:
+            response = insert_player(db_entry.get_hm())
+            db_entry.player_id = response['LAST_INSERT_ID()']
+
+        for db_entry in new_db_entries + old_db_entries:
+            insert_player_game({
+                'player_id': db_entry.player_id,
+                'game_id': game_id,
+                'slot_nr': db_entry.dota_player.slot_order,  # until blizzard fixes slot_nr
+                'elo_before': db_entry.old_elo,
+                'kills': db_entry.dota_player.kills,
+                'deaths': db_entry.dota_player.deaths,
+                'assists': db_entry.dota_player.assists,
+                'cskills': db_entry.dota_player.cskills,
+                'csdenies': db_entry.dota_player.csdenies
+            })
+
+        # for old_db_entries
+        for db_entry in old_db_entries:
+            update_player(db_entry.get_hm(), 'player_id')
+
+    except pymysql.err.IntegrityError as e:
+        return str(e)
+
+    #rank_players(status)
+    return "Replay uploaded to db. Game ID: " + str(game_id)
+
+
+def modify_game_upload_time(game_id, new_upload_time):
     game = get_game(game_id)
     if game['ranked'] == 1:
         return "Unrank the game before modifying upload time."
-    game['upload_time'] = upload_time
+    old_upload_time = game['upload_time']
+    game['upload_time'] = new_upload_time
     update_game(game)
-    return "Game ID: " + str(game_id) + " upload time set to " + upload_time
+    change_filename(old_upload_time, new_upload_time)
 
+    return "Game ID: " + str(game_id) + " upload time set to " + new_upload_time
+
+
+def rank_players(status):
+    sql = "select * from player ORDER BY elo DESC"
+    players = fetchall(sql, ())
+
+    for n in range(len(players)):
+        if status:
+            status.progress = "Ranking players: " + slash_delimited(n, len(players))
+        player = players[n]
+        player['rank'] = n+1
+        update_player(player)
+    status.progress = "Ranking players: " + slash_delimited(len(players), len(players))
+
+
+def show_game(game_id):
+    game = get_game(game_id)
+    if game is None:
+        return None
+
+    msg = "```"
+    msg += "Winner: " + game['winner'] + ", "
+    duration = game['duration']
+    mins = duration // 60
+    secs = duration - 60*mins
+    msg += str(mins) + 'm, ' + str(secs) + "s\n"
+
+    msg += "sentinel elo: " + str(round(game['team1_elo'],1)) + ", change: " \
+           + str(round(game['team1_elo_change'],1)) + '\n'
+
+    sql = "select * from player_game where game_id=%s order by slot_nr ASC"
+    player_games = fetchall(sql, (game_id))
+    for pg in player_games[:5]:
+        name = get_player_id(pg['player_id'])['name']
+        msg += strwidth(name, 15, pg['kills'], 4,
+                        pg['deaths'], 4, pg['assists'], 4) + '\n'
+
+    msg += "sentinel elo: " + str(round(game['team2_elo'],1)) + ", change: " \
+           + str(round(-game['team1_elo_change'],1)) + '\n'
+
+    for pg in player_games[5:]:
+        name = get_player_id(pg['player_id'])['name']
+        msg += strwidth(name, 15, pg['kills'], 4,
+                        pg['deaths'], 4, pg['assists'], 4) + '\n'
+    msg += "```"
+    return msg
+
+
+def reupload_all_replays(status:Status, status_queue: queue.Queue):
+    sql = "delete from games"
+    commit(sql, ())
+    sql = "delete from player"
+    commit(sql, ())
+    sql = "delete from player_game"
+    commit(sql, ())
+    status_queue.put("cleared db")
+    n = 0
+    files = sorted(os.listdir('replays'))
+    for file in files:
+        status.progress = 'Uploading ' + slash_delimited(n+1, len(files))
+        f = open('replays/' + file, 'rb')
+        data = f.read()
+        f.close()
+
+        parts = file.split('_')
+        date_and_time = parts[0] + '_' + parts[1]
+        if parts[3] is 'Sentinel':
+            winner = 1
+        else:
+            winner = 2
+        mins = int(parts[4])
+        secs = int(parts[5])
+        auto_replay_upload(data, date_and_time, winner, mins, secs)
+        n+=1
+
+    return str(n) + ' replays uploaded.'
+
+
+def delete_replay(game_id):
+    game = get_game(game_id, 'game_id')
+    if game is None:
+        return "Game not found in db."
+    if game['ranked'] == 1:
+        return 'Game is not unranked.'
+
+    game_id = game['game_id']
+    for file in os.listdir('replays'):
+        if fnmatch.fnmatch(file, '*' + game['hash'] + '*.w3g'):
+            filepath = os.path.join("replays", file)
+            os.remove(filepath)
+
+            #remove game
+            sql = "delete from games where game_id=%s"
+            commit(sql, (game_id))
+            #remove pgs
+            sql = "delete from player_game where game_id=%s"
+            commit(sql, (game_id))
+            #if the players only have 0 games, remove them aswell?
+            #can cause trouble if someone unranks 1 of 2 games, and then deletes the last, and then reranks
+            return "Game " + str(game_id) + " is no more."
+
+    return "Replay file on disk not found."
 
 class Client(discord.Client):
 
@@ -761,10 +1002,6 @@ class Client(discord.Client):
         messager = Message(message.channel)
         if command == '!sd':
             await self.sd_handler(message, payload)
-        elif command == '!timer' and payload:
-            await self.timer_handler(message, payload)
-        elif command == '!timerstop':
-            await self.timer_stop_handler(message, payload)
         elif command == '!confirm':
             await self.confirm_replay_handler(message, payload)
         elif command == '!discard':
@@ -773,15 +1010,20 @@ class Client(discord.Client):
             await self.manual_replay_handler(message, payload)
         elif command == '!list':
             await self.list_last_games_handler(message, payload)
-        elif command == '!cleardb':
+        elif command == '!cleardb' and admin:
             await self.clear_db_handler(message)
-        elif command == '!rank' and payload:
+        elif command == '!rank' and payload and admin:
             await self.rank_handler(message, payload)
-        elif command == '!unrank' and payload:
+        elif command == '!unrank' and payload and admin:
             await self.unrank_handler(message, payload)
-        elif command == '!setdate' and payload:
+        elif command == '!setdate' and payload and admin:
             await self.modify_game_upload_time_handler(message, payload)
-
+        elif command == '!show' and payload:
+            await self.show_game_handler(message, payload)
+        elif command == '!reupload_all_replays' and admin:
+            await self.reupload_all_replays_handler(message)
+        elif command == '!delete' and payload and admin:
+            await self.delete_replay_handler(message, payload)
         #elif command == '!queue':
         #    if payload:
         #        if admin:
@@ -807,8 +1049,8 @@ class Client(discord.Client):
         #        await self.pop_queue_handler(message, payload)
         #    else:
         #        await message.channel.send('!pop is an admin command')
-        #elif command == '!help':
-        #    await self.help_handler(message)
+        elif command == '!help':
+            await self.help_handler(message)
         #elif len(message.attachments) == 0:
         #    await message.channel.send('!sd name')
         #
@@ -821,7 +1063,14 @@ class Client(discord.Client):
 
     @staticmethod
     async def help_handler(message):
-        commands = ['!sd name', '!help']
+        commands = ['!sd name',
+                    '!list nr_of_last_games',
+                    'admin commands:',
+                    '!unrank game_id',
+                    '!rank game_id',
+                    '!setdate game_id yyyymmdd_xxhxxmxxs',
+                    '!reupload_all_replays (in order of upload time)',
+                    '!delete game_id (deletes an unranked game)']
         #queue_commands = ['!queue name', '!leave name', '!show', '!pop amount']
         msg = '```'
         for command in commands:
@@ -841,6 +1090,27 @@ class Client(discord.Client):
         sql = "delete from player_game"
         commit(sql, ())
         await message.channel.send("cleared db")
+
+    @staticmethod
+    async def show_game_handler(message: discord.message.Message, payload):
+
+        game_id = payload[0]
+
+        t1 = ThreadAnything(show_game, (game_id,))
+        t1.start()
+
+        response = Message(message.channel)
+
+        while t1.is_alive():
+            await asyncio.sleep(0.1)
+
+        if t1.exception:
+            raise t1.exception
+
+        if t1.rv:
+            await response.send(str(t1.rv))
+        else:
+            await response.send('No game found')
 
     @staticmethod
     async def pop_queue_handler(message, payload):
@@ -1080,34 +1350,43 @@ class Client(discord.Client):
             await message.channel.send(t1.rv)
 
     @staticmethod
-    async def timer_handler(message: discord.message.Message, payload):
-        t = int(payload[0])
-
-        status = Status()
-
-        t1 = ThreadAnything(timer, (t,), status)
-        Client.timer_queue[message.author] = (t1, status)
+    async def delete_replay_handler(message: discord.message.Message, payload):
+        game_id = int(payload[0])
+        t1 = ThreadAnything(delete_replay, (game_id,))
         t1.start()
 
-        response = Message(message.channel)
-
         while t1.is_alive():
-            await response.send_status(status.progress)
+            #await response.send_status(status.progress)
             await asyncio.sleep(0.1)
 
         if t1.exception:
-            try:
-                raise t1.exception
-            except TimerException:
-                await response.send('Timer broke.')
+            message.channel.send("delete_replay exception")
+            raise t1.exception
         else:
-            await response.send(t1.rv)
+            await message.channel.send(t1.rv)
 
     @staticmethod
-    async def timer_stop_handler(message: discord.message.Message, payload):
-        if message.author in Client.timer_queue:
-            t1, status = Client.timer_queue[message.author]
-            status.request = 'stop'
+    async def reupload_all_replays_handler(message: discord.message.Message):
+        response = Message(message.channel)
+
+        status = Status()
+        status_queue = queue.Queue()
+        t1 = ThreadAnything(reupload_all_replays, (), status=status, status_queue=status_queue)
+        t1.start()
+
+        while t1.is_alive():
+            while not status_queue.empty():
+                await message.channel.send(status_queue.get_nowait())
+            await response.send_status(status.progress)
+            await asyncio.sleep(0.1)
+
+        while not status_queue.empty():  # can maybe make prettier
+            await message.channel.send(status_queue.get_nowait())
+
+        if t1.exception:
+            raise t1.exception
+
+        await response.send(t1.rv)
 
 client = Client()
 client.run(keys.TOKEN)

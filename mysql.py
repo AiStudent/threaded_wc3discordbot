@@ -112,9 +112,9 @@ def update_game(game_hm: dict, where='game_id'):
     update_dict('games', game_hm, (where,))
 
 
-def get_game(game_id):
-    sql = "SELECT * FROM games WHERE game_id = %s"
-    return fetchone(sql, (game_id,))
+def get_game(value, field='game_id'):
+    sql = "SELECT * FROM games WHERE " + field + " = %s"
+    return fetchone(sql, (value,))
 
 
 def insert_game(game):
