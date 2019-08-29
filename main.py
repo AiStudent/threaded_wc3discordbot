@@ -743,7 +743,7 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
     return "Replay uploaded to db. Game ID: " + str(game_id)
 
 
-def auto_replay_upload(replay, date_and_time, winner, mins, secs):
+def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=None):
     # parse
     data = decompress_replay(replay)
 
@@ -751,6 +751,8 @@ def auto_replay_upload(replay, date_and_time, winner, mins, secs):
         dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
     except NotCompleteGame:
         dota_players, mode, unparsed = parse_incomplete_game(data)
+        if winner is None:
+            raise Exception('auto_replay_upload incomplete replay with no given arguments')
 
     stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
     md5 = get_hash(stats_bytes)
@@ -856,7 +858,6 @@ def auto_replay_upload(replay, date_and_time, winner, mins, secs):
     except pymysql.err.IntegrityError as e:
         return str(e)
 
-    #rank_players(status)
     return "Replay uploaded to db. Game ID: " + str(game_id)
 
 
@@ -945,6 +946,7 @@ def reupload_all_replays(status:Status, status_queue: queue.Queue):
         auto_replay_upload(data, date_and_time, winner, mins, secs)
         n+=1
 
+    rank_players(status)
     return str(n) + ' replays uploaded.'
 
 
@@ -1024,6 +1026,7 @@ class Client(discord.Client):
             await self.reupload_all_replays_handler(message)
         elif command == '!delete' and payload and admin:
             await self.delete_replay_handler(message, payload)
+
         #elif command == '!queue':
         #    if payload:
         #        if admin:
@@ -1387,6 +1390,7 @@ class Client(discord.Client):
             raise t1.exception
 
         await response.send(t1.rv)
+
 
 client = Client()
 client.run(keys.TOKEN)
