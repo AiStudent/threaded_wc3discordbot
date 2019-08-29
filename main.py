@@ -572,6 +572,19 @@ def reset_stats_of_latest_game(game_id):
         update_player(p)
 
 
+def cleard_db():
+    sql = "delete from games"
+    commit(sql, ())
+    sql = "ALTER TABLE games AUTO_INCREMENT = 1"
+    commit(sql, ())
+    sql = "delete from player"
+    commit(sql, ())
+    sql = "ALTER TABLE player AUTO_INCREMENT = 1"
+    commit(sql, ())
+    sql = "delete from player_game"
+    commit(sql, ())
+
+
 def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
     # parse
     data = decompress_replay(replay)
@@ -615,8 +628,26 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
     team1_win_elo_inc, team2_win_elo_inc = team_win_elos(team1, team2)
     team1_avg_elo, team2_avg_elo = avg_team_elo(team1), avg_team_elo(team2)
 
+
+    msg = '```Winner: ?, ? mins, ? secs, elo ratio (' + \
+          str(round(team1_win_elo_inc, 1)) + '/' + str(round(team2_win_elo_inc, 1)) + ')\n'
+
+    team1_dp = [dota_player for dota_player in dota_players if dota_player.team == 1]
+    team2_dp = [dota_player for dota_player in dota_players if dota_player.team == 2]
+
+    msg += 'sentinel avg elo: ' + str(round(team1_avg_elo, 1)) + '\n'
+    for dota_player in team1_dp:
+        msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
+                        dota_player.deaths, 4, dota_player.assists, 4) + '\n'
+    msg += 'scourge avg elo: ' + str(round(team2_avg_elo, 1)) + '\n'
+    for dota_player in team2_dp:
+        msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
+                        dota_player.deaths, 4, dota_player.assists, 4) + '\n'
+    msg += "```"
+
+
     #send preliminary message
-    msg = "!discard or !manual winner mins secs"
+    msg += "!discard or !manual winner mins secs"
     status_queue.put(msg)
 
     while True:
@@ -635,9 +666,13 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
                 status_queue.put("winner: sentinel or scourge")
                 status.request = None
                 continue
-            mins = int(status.request[2])
-            secs = int(status.request[3])
-            break
+            try:
+                mins = int(status.request[2])
+                secs = int(status.request[3])
+                break
+            except ValueError:
+                status_queue.put("like: !manual sentinel 34 3")
+                status.request = None
 
     t1_elo_change, t2_elo_change = teams_update_elo(team1, team2, winner)
 
@@ -922,12 +957,7 @@ def show_game(game_id):
 
 
 def reupload_all_replays(status:Status, status_queue: queue.Queue):
-    sql = "delete from games"
-    commit(sql, ())
-    sql = "delete from player"
-    commit(sql, ())
-    sql = "delete from player_game"
-    commit(sql, ())
+    cleard_db()
     status_queue.put("cleared db")
     n = 0
     files = sorted(os.listdir('replays'))
@@ -1013,7 +1043,7 @@ class Client(discord.Client):
             await self.confirm_replay_handler(message, payload)
         elif command == '!discard':
             await self.discard_replay_handler(message, payload)
-        elif command == '!manual':
+        elif command == '!manual' and payload:
             await self.manual_replay_handler(message, payload)
         elif command == '!list':
             await self.list_last_games_handler(message, payload)
@@ -1091,12 +1121,7 @@ class Client(discord.Client):
 
     @staticmethod
     async def clear_db_handler(message):
-        sql = "delete from games"
-        commit(sql, ())
-        sql = "delete from player"
-        commit(sql, ())
-        sql = "delete from player_game"
-        commit(sql, ())
+        cleard_db()
         await message.channel.send("cleared db")
 
     @staticmethod
