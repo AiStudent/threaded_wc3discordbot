@@ -26,8 +26,8 @@ def is_time(word:str):
         and word[5] and word[6:8].isnumeric() and word[8]
 
 #only complete replays
-def modified_time_to_dota_replay_format():
-    files = os.listdir('replays')
+def modified_time_to_dota_replay_format(old_path, new_path):
+    files = os.listdir(old_path)
 
     for file in files:
 
@@ -39,11 +39,11 @@ def modified_time_to_dota_replay_format():
 
 
 
-        stat = os.stat('replays/'+file)
+        stat = os.stat(old_path+file)
         ts = int(stat.st_mtime)
         date_and_time = datetime.utcfromtimestamp(ts).strftime('%Y%m%d_%Hh%Mm%Ss')
 
-        f = open('replays/' + file, 'rb')
+        f = open(old_path + file, 'rb')
         replay = f.read()
         f.close()
 
@@ -58,18 +58,23 @@ def modified_time_to_dota_replay_format():
                            + '_' + str(mins) + '_' + str(secs) + '_' + str(md5) + '.w3g'
 
             print(new_filename)
-            os.rename('replays/' + file, 'replays/'+new_filename)
-
+            #os.rename('replays/' + file, 'replays/'+new_filename)
+            f = open(new_path + new_filename, 'wb')
+            f.write(replay)
+            f.close()
         except NotCompleteGame:
             dota_players, mode, unparsed = parse_incomplete_game(data)
             stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
             md5 = get_hash(stats_bytes)
             new_filename = date_and_time + '_incomplete_none_none_none_' + md5 + '.w3g'
             print(new_filename)
-            os.rename('replays/' + file, 'replays/'+new_filename)
-
+            #os.rename('replays/' + file, 'replays/'+new_filename)
+            f = open(new_path + new_filename, 'wb')
+            f.write(replay)
+            f.close()
         except NotDotaReplay:
             print('skipping NotDotaReplay', file)
 
 
-modified_time_to_dota_replay_format()
+import sys
+modified_time_to_dota_replay_format(sys.argv[1], sys.argv[2])
