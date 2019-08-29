@@ -220,8 +220,10 @@ def strwidthleft(name: str, width, *args):
     return string
 
 
-def sd_player(name):
-    p = get_player(name)
+def sd_player(name: str):
+    p = get_player(name.lower())
+    if p is None:
+        return 'No stats on ' + name
     return name + ': ' + str(round(p['elo'], 1)) + ' elo, ' + \
         'W/L ' + slash_delimited(p['wins'], p['loss']) + ', avg KDA ' + \
         slash_delimited(round(p['avgkills'],1), round(p['avgdeaths'],1), round(p['avgassists'],1))
@@ -941,6 +943,9 @@ def reupload_all_replays(status:Status, status_queue: queue.Queue):
             winner = 1
         else:
             winner = 2
+
+        if parts[4] == 'none':
+            return "Stopped at an incomplete replay: " + file
         mins = int(parts[4])
         secs = int(parts[5])
         auto_replay_upload(data, date_and_time, winner, mins, secs)
@@ -1277,8 +1282,7 @@ class Client(discord.Client):
         if t1.rv:
             #db_entry = DBEntry(t1.rv)
             await response.send(str(t1.rv))
-        else:
-            await response.send('No stats on ' + name)
+
 
     @staticmethod
     async def list_last_games_handler(message: discord.message.Message, payload=None):
