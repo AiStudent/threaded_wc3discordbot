@@ -113,7 +113,7 @@ def clear_db():
 def transfer_db(status, prints=False):
     if prints:
         print('fetching')
-    status.progress = 'Transferring to web server'
+    status.progress = 'Updating web server'
     sql="select * from player"
     player = fetchall(sql, ())
     sql="select * from games"

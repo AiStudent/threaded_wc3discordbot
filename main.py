@@ -324,7 +324,8 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
         elif status.request is 'confirm':
             break
 
-    status_queue.put("Uploading to db..")
+    #status_queue.put("Uploading to db..")
+    status.progress = "Uploading to local db"
 
     date_and_time = datetime.now().strftime("%Y%m%d_%Hh%Mm%Ss")
     #yyyymmdd_xxhxxmxxs_complete_winner_mins_secs_hash
@@ -916,16 +917,15 @@ def modify_game_upload_time(game_id, new_upload_time):
 
 
 def rank_players(status):
+    status.progress = "Ranking players.."
     sql = "select * from player ORDER BY elo DESC"
     players = fetchall(sql, ())
 
     for n in range(len(players)):
-        if status:
-            status.progress = "Ranking players: " + slash_delimited(n, len(players))
         player = players[n]
         player['rank'] = n+1
         update_player(player)
-    status.progress = "Ranking players: " + slash_delimited(len(players), len(players))
+
 
 
 def show_game(game_id):
