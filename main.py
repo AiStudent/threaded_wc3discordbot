@@ -1016,6 +1016,8 @@ class Client(discord.Client):
     timer_queue = {}
     current_replay_upload = None
 
+    lock = False
+
     async def on_ready(self):
         print('Logged on as', self.user)
 
@@ -1121,7 +1123,12 @@ class Client(discord.Client):
 
     @staticmethod
     async def clear_db_handler(message):
+        if Client.lock:
+            await message.channel.send("db is currently locked")
+            return
+        Client.lock = True
         cleard_db()
+        Client.lock = False
         await message.channel.send("cleared db")
 
     @staticmethod
@@ -1213,6 +1220,10 @@ class Client(discord.Client):
             author = Client.current_replay_upload[0]
             await message.channel.send('{0.mention} !confirm or !discard previous replay'.format(author))
             return
+        elif Client.lock:
+            await message.channel.send("db is currently locked")
+            return
+        Client.lock = True
 
         status_queue = queue.Queue()
         status = Status()
@@ -1229,6 +1240,7 @@ class Client(discord.Client):
             await message.channel.send(status_queue.get_nowait())
 
         if t1.exception:
+            Client.lock = False
             try:
                 raise t1.exception
             except CouldNotDecompress:
@@ -1241,6 +1253,7 @@ class Client(discord.Client):
         else:
             await message.channel.send(t1.rv)
 
+        Client.lock = False
         Client.current_replay_upload = None
 
     @staticmethod
@@ -1260,10 +1273,14 @@ class Client(discord.Client):
             await message.channel.send(status_queue.get_nowait())
 
         if t1.exception:
+            Client.lock = False
+            Client.current_replay_upload = None
             raise t1.exception
         else:
             await message.channel.send(t1.rv)
 
+        Client.lock = False
+        Client.current_replay_upload = None
 
     @staticmethod
     async def confirm_replay_handler(message: discord.message.Message, payload=None):
@@ -1329,6 +1346,11 @@ class Client(discord.Client):
 
     @staticmethod
     async def rank_handler(message: discord.message.Message, payload):
+        if Client.lock:
+            await message.channel.send("db is currently locked")
+            return
+        Client.lock = True
+
         response = Message(message.channel)
         nr = int(payload[0])
 
@@ -1341,13 +1363,20 @@ class Client(discord.Client):
             await asyncio.sleep(0.1)
 
         if t1.exception:
+            Client.lock = False
             raise t1.exception
 
+        Client.lock = False
         await response.send(t1.rv)
 
 
     @staticmethod
     async def unrank_handler(message: discord.message.Message, payload):
+        if Client.lock:
+            await message.channel.send("db is currently locked")
+            return
+        Client.lock = True
+
         response = Message(message.channel)
         nr = int(payload[0])
 
@@ -1360,8 +1389,10 @@ class Client(discord.Client):
             await asyncio.sleep(0.1)
 
         if t1.exception:
+            Client.lock = False
             raise t1.exception
 
+        Client.lock = False
         await response.send(t1.rv)
 
     @staticmethod
@@ -1399,6 +1430,11 @@ class Client(discord.Client):
 
     @staticmethod
     async def reupload_all_replays_handler(message: discord.message.Message):
+        if Client.lock:
+            await message.channel.send("db is currently locked")
+            return
+        Client.lock = True
+
         response = Message(message.channel)
 
         status = Status()
@@ -1416,8 +1452,10 @@ class Client(discord.Client):
             await message.channel.send(status_queue.get_nowait())
 
         if t1.exception:
+            Client.lock = False
             raise t1.exception
 
+        Client.lock = False
         await response.send(t1.rv)
 
 
