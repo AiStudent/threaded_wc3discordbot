@@ -1029,12 +1029,6 @@ async def timer_loop():
             f.close()
             await asyncio.sleep(Client.uptime - now)
 
-        if Client.is_closing_time() and not Client.lock:
-            Client.lock = True
-        if Client.is_close_time() and Client.lock:
-            quit()
-        
-        #await asyncio.sleep(1)
     
 
 class Client(discord.Client):
@@ -1043,15 +1037,6 @@ class Client(discord.Client):
     timer_queue = {}
     current_replay_upload = None
     lock = False
-
-    @staticmethod
-    def is_closing_time():
-        return Client.uptime > 3580
-
-
-    @staticmethod
-    def is_close_time():
-        return Client.uptime > 3620
 
 
     async def on_ready(self):
@@ -1109,37 +1094,8 @@ class Client(discord.Client):
             await self.shutdown_handler(message)
         elif command == '!force_shutdown' and admin:
             await self.force_shutdown_handler(message)
-
-        #elif command == '!queue':
-        #    if payload:
-        #        if admin:
-        #            await self.queue_handler(message, payload)
-        #        else:
-        #            await message.channel.send('Only admins can !queue others')
-        #    else:
-        #        await self.queue_handler(message)
-
-        #elif command == '!leave':
-        #    if payload:
-        #        if admin:
-        #            await self.leave_handler(message, payload)
-        #        else:
-        #            await message.channel.send('Only admins can !leave others')
-        #    else:
-        #        await self.leave_handler(message)
-
-        #elif command == '!show':
-        #    await self.show_queue_handler(message)
-        #elif command == '!pop' and payload[0]:
-        #    if admin:
-        #        await self.pop_queue_handler(message, payload)
-        #    else:
-        #        await message.channel.send('!pop is an admin command')
         elif command == '!help':
             await self.help_handler(message)
-        #elif len(message.attachments) == 0:
-        #    await message.channel.send('!sd name')
-        #
         for attachment in message.attachments:
             if attachment.filename[-4:] == '.w3g':
                 data = requests.get(attachment.url).content
@@ -1157,22 +1113,15 @@ class Client(discord.Client):
                     '!setdate game_id yyyymmdd_xxhxxmxxs',
                     '!reupload_all_replays (in order of upload time)',
                     '!delete game_id (deletes an unranked game)']
-        #queue_commands = ['!queue name', '!leave name', '!show', '!pop amount']
         msg = '```'
         for command in commands:
             msg += command + '\n'
-        #msg += 'Queue commands (beta: possible to queue others):\n'
-        #for command in queue_commands:
-        #    msg += command + '\n'
         msg += '```'
         await message.channel.send(msg)
 
     @staticmethod
     async def clear_db_handler(message):
-        if Client.is_closing_time():
-            await message.channel.send("Restarting bot in 20s, please try in a min")
-            return
-        elif Client.lock:
+        if Client.lock:
             await message.channel.send("db is currently locked")
             return
         Client.lock = True
@@ -1183,13 +1132,7 @@ class Client(discord.Client):
     @staticmethod
     async def show_game_handler(message: discord.message.Message, payload):
         game_id = payload[0]
-        game_info = show_game(game_id)
-        if game_info:
-            await message.channel.send(game_info)
-        else:
-            await message.channel.send('No game found')
 
-        """
         t1 = ThreadAnything(show_game, (game_id,))
         t1.start()
 
@@ -1205,74 +1148,12 @@ class Client(discord.Client):
             await response.send(str(t1.rv))
         else:
             await response.send('No game found')
-        """
-    @staticmethod
-    async def pop_queue_handler(message, payload):
-        delim = int(payload[0])
-        Client.player_queue, people = Client.player_queue[delim:], Client.player_queue[:delim]
-        msg = ''
-        for n in range(len(people)-1):
-            msg += people[n][0] + ', '
-        if len(people) > 0:
-            msg += people[-1][0]
-        await message.channel.send('Popped: ' + msg)
-        await Client.show_queue_handler(message)
 
-    @staticmethod
-    async def show_queue_handler(message):
-        msg = '```'
-        t1 = time.time()
-        if len(Client.player_queue):
-            for n in range(len(Client.player_queue)):
-                entry = Client.player_queue[n]
-                name, t0 = entry
-                t = t1-t0
-                hours = int(t // 3600)
-                t -= hours * 3600
-                mins = int(t // 60)
-                t -= mins*60
-                secs = round(t)
-                t_msg = str(hours) + 'h ' + str(mins) + 'm ' + str(secs) + 's'
-                msg += str(n+1).ljust(3) + '  ' + name.ljust(14) + t_msg + '\n'
-        else:
-            msg += 'Empty'
-        msg += '```'
-        await message.channel.send(msg)
 
-    @staticmethod
-    async def leave_handler(message, payload = None):
-        if payload is None:
-            payload = [str(message.author.name)]
-        name = payload[0]
-        for n in range(len(Client.player_queue)):
-            if Client.player_queue[n][0] == name:
-                del Client.player_queue[n]
-                await Client.show_queue_handler(message)
-                return
-        
-        await message.channel.send(name + ' not found in queue.')
-
-    @staticmethod
-    async def queue_handler(message, payload=None):
-        if payload is None:
-            name = str(message.author.name)
-        else:
-            name = payload[0]
-        exists = False
-        for entry in Client.player_queue:
-            if entry[0] == name:
-                exists = True
-        if not exists:
-            Client.player_queue += [(name, time.time())]
-            
-        await Client.show_queue_handler(message)
 
     @staticmethod
     async def replay_handler(message: discord.message.Message, data):
-        if Client.is_closing_time():
-            await message.channel.send("Restarting bot in 20s, please try in a min")
-            return
-        elif Client.current_replay_upload:
+        if Client.current_replay_upload:
             author = Client.current_replay_upload[0]
             await message.channel.send('{0.mention} !confirm or !discard previous replay'.format(author))
             return
@@ -1303,7 +1184,6 @@ class Client(discord.Client):
                 await message.channel.send('Decompress error.')
             except NotCompleteGame:
                 await message.channel.send('Incomplete game.')
-                del t1
                 await Client.manual_input_replay_handler(message, data)
             except NotDotaReplay:
                 await message.channel.send('Not a dota replay.')
@@ -1375,9 +1255,6 @@ class Client(discord.Client):
         else:
             name = payload[0]
 
-        player_info = sd_player(name)
-        await message.channel.send(player_info)
-        """
         t1 = ThreadAnything(sd_player, (name,))
         t1.start()
 
@@ -1390,9 +1267,8 @@ class Client(discord.Client):
             raise t1.exception
 
         if t1.rv:
-            #db_entry = DBEntry(t1.rv)
             await response.send(str(t1.rv))
-        """
+
 
     @staticmethod
     async def list_last_games_handler(message: discord.message.Message, payload=None):
@@ -1402,24 +1278,18 @@ class Client(discord.Client):
         else:
             nr = 10
 
-        await message.channel.send(list_last_games(nr))
-        """
         t1 = ThreadAnything(list_last_games, (nr,))
         t1.start()
 
         while t1.is_alive():
-            #await response.send_status(status.progress)
             await asyncio.sleep(0.1)
 
         await response.send(t1.rv)
-        """
+
 
     @staticmethod
     async def rank_handler(message: discord.message.Message, payload):
-        if Client.uptime > 3400:
-            await message.channel.send("Restarting bot in 200s, please try in 5 min")
-            return
-        elif Client.lock:
+        if Client.lock:
             await message.channel.send("db is currently locked")
             return
         Client.lock = True
@@ -1445,10 +1315,7 @@ class Client(discord.Client):
 
     @staticmethod
     async def unrank_handler(message: discord.message.Message, payload):
-        if Client.uptime > 3400:
-            await message.channel.send("Restarting bot in 200s, please try in 5 min")
-            return
-        elif Client.lock:
+        if Client.lock:
             await message.channel.send("db is currently locked")
             return
         Client.lock = True
@@ -1473,9 +1340,6 @@ class Client(discord.Client):
 
     @staticmethod
     async def modify_game_upload_time_handler(message: discord.message.Message, payload):
-        if Client.is_closing_time():
-            await message.channel.send("Restarting bot in 20s, please try in a min")
-            return
         if Client.lock:
             await message.channel.send("db is currently locked")
             return
@@ -1486,7 +1350,6 @@ class Client(discord.Client):
         t1.start()
 
         while t1.is_alive():
-            #await response.send_status(status.progress)
             await asyncio.sleep(0.1)
 
         if t1.exception:
@@ -1498,9 +1361,6 @@ class Client(discord.Client):
 
     @staticmethod
     async def delete_replay_handler(message: discord.message.Message, payload):
-        if Client.is_closing_time():
-            await message.channel.send("Restarting bot in 20s, please try in a min")
-            return
         if Client.lock:
             await message.channel.send("db is currently locked")
             return
@@ -1510,7 +1370,6 @@ class Client(discord.Client):
         t1.start()
 
         while t1.is_alive():
-            #await response.send_status(status.progress)
             await asyncio.sleep(0.1)
 
         if t1.exception:
@@ -1522,9 +1381,6 @@ class Client(discord.Client):
 
     @staticmethod
     async def reupload_all_replays_handler(message: discord.message.Message):
-        if Client.uptime > 3400:
-            await message.channel.send("Restarting bot in 200s, please try in 5min min")
-            return
         if Client.lock:
             await message.channel.send("db is currently locked")
             return
