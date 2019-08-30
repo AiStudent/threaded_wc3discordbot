@@ -1012,7 +1012,7 @@ def delete_replay(game_id):
 
 
 async def timer_loop():
-    Client.uptime = int(time.perf_counter())
+    Client.uptime = 0
     f = open('uptime_log.txt', 'w')
     print(int(time.time()), Client.uptime, file=f)
     f.close()
