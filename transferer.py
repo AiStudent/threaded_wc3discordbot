@@ -110,9 +110,10 @@ def clear_db():
     commit(sql, ())
 
 
-def transfer_db(prints=False):
+def transfer_db(status, prints=False):
     if prints:
         print('fetching')
+    status.progress = 'Transferring to web server'
     sql="select * from player"
     player = fetchall(sql, ())
     sql="select * from games"
@@ -133,6 +134,9 @@ def transfer_db(prints=False):
     insert_dict('player_game', pg)
 
 if __name__ == '__main__':
-
-    transfer_db(True)
+    class Status:
+        def __init__(self):
+            self.progress = None
+    status = Status()
+    transfer_db(status)
 

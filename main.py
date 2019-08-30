@@ -19,6 +19,7 @@ from elo import avg_team_elo_dict, team_win_elos_dict
 import fnmatch
 import os
 import pymysql
+from transferer import transfer_db
 
 # A function in another file
 class TimerException(Exception):
@@ -373,6 +374,7 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
         return str(e)
 
     rank_players(status)
+    transfer_db(status)
     return "Replay uploaded to db. Game ID: " + str(game_id)
 
 
@@ -408,6 +410,7 @@ def rank_game(game_id, status):
     # ignore current game and recalculate for all after
     recalculate_elo_from_game(upload_time, status=status)
     rank_players(status)
+    transfer_db(status)
     return "done"
 
 
@@ -427,6 +430,7 @@ def unrank_game(game_id, status):
 
     recalculate_elo_from_game(upload_time, status=status)
     rank_players(status)
+    transfer_db(status)
     return "done"
 
 
@@ -777,6 +781,7 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
         return str(e)
 
     rank_players(status)
+    transfer_db(status)
     return "Replay uploaded to db. Game ID: " + str(game_id)
 
 
@@ -982,6 +987,7 @@ def reupload_all_replays(status:Status, status_queue: queue.Queue):
         n+=1
 
     rank_players(status)
+    transfer_db(status)
     return str(n) + ' replays uploaded.'
 
 
