@@ -1063,7 +1063,10 @@ class Client(discord.Client):
             await self.reupload_all_replays_handler(message)
         elif command == '!delete' and payload and admin:
             await self.delete_replay_handler(message, payload)
-
+        elif command == '!shutdown' and admin:
+            await self.shutdown_handler(message)
+        elif command == '!force_shutdown' and admin:
+            await self.force_shutdown_handler(message)
         #elif command == '!queue':
         #    if payload:
         #        if admin:
@@ -1458,6 +1461,20 @@ class Client(discord.Client):
         Client.lock = False
         await response.send(t1.rv)
 
+    @staticmethod
+    async def shutdown_handler(message: discord.message.Message):
+        if Client.lock:
+            await message.channel.send("db is currently busy")
+            return
+        print("shutdown..")
+        await message.channel.send("shutdown..")
+        quit()
+
+    @staticmethod
+    async def force_shutdown_handler(message: discord.message.Message):
+        print("shutdown..")
+        await message.channel.send("shutdown..")
+        quit()
 
 client = Client()
 client.run(keys.TOKEN)
