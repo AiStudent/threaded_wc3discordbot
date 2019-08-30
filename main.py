@@ -1012,14 +1012,17 @@ def delete_replay(game_id):
 
 
 async def timer_loop():
+    start = time.perf_counter() 
     Client.uptime = 0
     f = open('uptime_log.txt', 'w')
     print(int(time.time()), Client.uptime, file=f)
     f.close()
+    
     while True:
         Client.uptime += 1
-        now = time.perf_counter()
-
+        now = time.perf_counter() - start
+        #print('now', now)
+        
         if Client.uptime > now:
             f = open('uptime_log.txt', 'a')
             print(int(time.time()), Client.uptime, file=f)
@@ -1030,7 +1033,9 @@ async def timer_loop():
             Client.lock = True
         if Client.is_close_time() and Client.lock:
             quit()
-
+        
+        #await asyncio.sleep(1)
+    
 
 class Client(discord.Client):
     uptime = 0
