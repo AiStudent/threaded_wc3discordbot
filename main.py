@@ -950,7 +950,7 @@ def show_game(game_id):
         msg += strwidth(name, 15, pg['kills'], 4,
                         pg['deaths'], 4, pg['assists'], 4) + '\n'
 
-    msg += "sentinel elo: " + str(round(game['team2_elo'],1)) + ", change: " \
+    msg += "scourge elo: " + str(round(game['team2_elo'],1)) + ", change: " \
            + str(round(-game['team1_elo_change'],1)) + '\n'
 
     for pg in player_games[5:]:
@@ -976,9 +976,10 @@ def reupload_all_replays(status:Status, status_queue: queue.Queue):
         date_and_time = parts[0] + '_' + parts[1]
         if parts[3] is 'Sentinel':
             winner = 1
-        else:
+        elif parts[3] is 'Scourge':
             winner = 2
-
+        else:
+            return "Stopped at a bad filename: " + file
         if parts[4] == 'none':
             return "Stopped at an incomplete replay: " + file
         mins = int(parts[4])

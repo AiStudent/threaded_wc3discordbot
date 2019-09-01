@@ -265,10 +265,25 @@ pinkpg.slot_nr=5 and
 blue.player_id=bluepg.player_id and
 pink.player_id=pinkpg.player_id;
 
+select * from player where name='one_legion'
 
  select g.game_id, g.ranked, g.upload_time, blue.name, pink.name from games g, player_game bluepg, player_game pinkpg, player blue, player pink where g.game_id=bluepg.game_id and g.game_id=pinkpg.game_id and bluepg.slot_nr=0 and pinkpg.slot_nr=5 and blue.player_id=bluepg.player_id and pink.player_id=pinkpg.player_id order by upload_time ASC;
 
  select g.game_id, g.ranked, g.upload_time, blue.name as blue, pink.name as pink from games g, player_game bluepg, player_game pinkpg, player blue, player pink where g.game_id=bluepg.game_id and g.game_id=pinkpg.game_id and bluepg.slot_nr=0 and pinkpg.slot_nr=5 and blue.player_id=bluepg.player_id and pink.player_id=pinkpg.player_id order by upload_time ASC;
 firstbl5_dotastats_v2.
+
+
+select g.game_id, g.ranked, g.winner, g.upload_time, blue.name as blue, pink.name as pink 
+from
+games g, player_game bluepg, player_game pinkpg, player blue, player pink, player who 
+where 
+g.game_id=bluepg.game_id and
+g.game_id=pinkpg.game_id and
+bluepg.slot_nr=0 and
+pinkpg.slot_nr=5 and
+blue.player_id=bluepg.player_id and
+pink.player_id=pinkpg.player_id and
+who.name='one_legion'
+order by upload_time ASC";
 
 """
