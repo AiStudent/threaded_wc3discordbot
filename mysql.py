@@ -167,93 +167,9 @@ def update_player_game(player_game):
 
 
 
-testplayer =         {
-            'name' : "holybear",
-            'elo' : 1050.0,
-            'games' : 2,
-            'wins' : 1,
-            'loss' : 1,
-            'draw' : 0,
-            'kills' : 30,
-            'deaths' : 40,
-            'assists' : 50,
-            'cskills' : 1,
-            'csdenies' : 2,
-            'avgkills' : 3,
-            'avgdeaths' : 4,
-            'avgassists' : 5,
-            'avgcskills' : 6,
-            'avgcsdenies' : 7
-        }
-
-test_playergame = {
-    'player_id' : 1,
-    'game_id' : 3,
-    'elo' : 1000,
-    'kills' : 10,
-    'deaths' : 5,
-    'assists' : 9,
-    'cskills' : 10,
-    'csdenies' : 0
-}
-
-testgame = {
-            'mode': 'cdzd',
-            'winner': 1,
-            'duration': 2,
-            'upload_time': 'date..',
-            'hash': '4',
-            'ranked': 1,
-            'elo_alg': 'v1.0'
-        }
-
-
 if __name__ == '__main__':
+    pass
 
-    #insert_into_games((1, 2, 3, '7', 5, 6, 7))
-
-    #unrank_game(4)111
-
-    #update_game('6', (1, 2, 3, 5, 6, 7))
-
-    #g = get_game('6')
-    #print(g)
-    #g['winner'] = 4
-    #update_game(g, 'game_id')
-    #print(get_game('6'))
-
-    #print(get_player_game(3))
-    #update_player_game
-
-    #p = get_player('fantom')
-    #p['elo'] = 2000
-    #update_player(p, 'player_id')
-    #print(get_player('fantom'))
-
-    #pg = get_player_games(1)[0]
-    #print(pg)
-    #pg['kills'] = 4
-    #update_player_game(pg)
-    #pg = get_player_games(1)[0]
-    #pg = get_player_games(1)[0]
-    #print(pg)
-
-    #insert_player_game(test_playergame)
-    #insert_player(testplayer)
-    #insert_game(testgame)
-    # get player_id game stuff
-    sql = "select g.*, pg.* from games g, player_game pg where g.game_id=pg.game_id and pg.player_id=%s"
-    #print(fetchall(sql, (1,)))
-
-    # get all games each player was in
-    sql = "select p.name, pg.game_id from games g, player_game pg, player p where g.game_id=pg.game_id and p.player_id=pg.player_id"
-
-    sql = "insert into person (name) values ('asdasd')"
-    #print(commit_and_check(sql, ()))
-    #sql = "SELECT LAST_INSERT_ID()"
-    #print(fetchall(sql, ()))
-
-    p = get_player_games()
 
 """
 select g.game_id, g.ranked, g.upload_time, blue.name, pink.name from

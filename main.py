@@ -21,27 +21,13 @@ import os
 import pymysql
 from transferer import transfer_db
 
-# A function in another file
-class TimerException(Exception):
-    pass
-
-
-def timer(t, status=None):
-    while t > 0:
-        t -= 1
-        if status:
-            status.progress = t
-            if status.request == 'stop':
-                return 'timer stopped'
-        time.sleep(1)
-        #raise TimerException
-    return 42
+REMOTE_DB = False
 
 
 class Status:
     def __init__(self):
         self.progress = None
-        self.request = None
+        self.request_queue = queue.Queue()
 
 class ThreadAnything(threading.Thread):
     def __init__(self, func, args, status=None, status_queue=None):
@@ -195,6 +181,7 @@ class DBEntry:
             hm['player_id'] = self.player_id
         return hm
 
+
 def slash_delimited(*args):
     string = '('
     for n in range(len(args)-1):
@@ -230,51 +217,26 @@ def sd_player(name: str):
         slash_delimited(round(p['avgkills'],1), round(p['avgdeaths'],1), round(p['avgassists'],1))
 
 
-def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue):
-    status_queue.put('Attempting to decompress..')
-    data = decompress_replay(replay)
-    dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
+def structure_game_msg(winner, mins, secs, team1_win_elo_inc, team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo):
+    msg = "```Winner: " + winner + ', ' + str(mins) + 'm, ' + str(secs) + 's, elo ratio (' +\
+          str(round(team1_win_elo_inc, 1)) + '/' + str(round(team2_win_elo_inc, 1)) + ')\n'
 
-    # check if already uploaded
-    stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
-    md5 = get_hash(stats_bytes)
-    if check_if_replay_exists(md5):
-        game = get_game(md5, 'hash')
-        return "Replay already uploaded with Game ID: " + str(game['game_id'])
+    team1_dp = [dota_player for dota_player in dota_players if dota_player.team == 1]
+    team2_dp = [dota_player for dota_player in dota_players if dota_player.team == 2]
 
-    team1 = []
-    team2 = []
-    db_entries = []
-    new_db_entries = []
-    old_db_entries = []
-    for dota_player in dota_players:
-        dota_player.name = dota_player.name.lower()
-        db_entry = get_player(dota_player.name) #get_player_from_db(dota_player.name)
-        if db_entry is None:
-            db_entry = DBEntry(dota_player)
-            new_db_entries += [db_entry]
-        else:
-            db_entry = DBEntry(db_entry)
-            old_db_entries += [db_entry]
+    msg += 'sentinel avg elo: ' + str(round(team1_avg_elo, 1)) + '\n'
+    for dota_player in team1_dp:
+        msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
+                        dota_player.deaths, 4, dota_player.assists, 4) + '\n'
+    msg += 'scourge avg elo: ' + str(round(team2_avg_elo, 1)) + '\n'
+    for dota_player in team2_dp:
+        msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
+                        dota_player.deaths, 4, dota_player.assists, 4) + '\n'
+    msg += "```"
+    return msg
 
-        db_entry.old_elo = db_entry.elo
 
-        if dota_player.team == 1:
-            team1 += [db_entry]
-        elif dota_player.team == 2:
-            team2 += [db_entry]
-
-        db_entries += [db_entry]
-
-    if len(team1) != len(team2):
-        return "Not an equal amount of players on both teams."
-    # determine elo change
-    team1_win_elo_inc, team2_win_elo_inc = team_win_elos(team1, team2)
-    team1_avg_elo, team2_avg_elo = avg_team_elo(team1), avg_team_elo(team2)
-
-    t1_elo_change, t2_elo_change = teams_update_elo(team1, team2, winner)
-
-    # add up stats
+def add_dp_dbentries(dota_players, db_entries, winner):
     for n in range(len(dota_players)):  # same order as before
         dota_player = dota_players[n]
         db_entry = db_entries[n]
@@ -295,33 +257,46 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
         db_entry.avgcskills = db_entry.cskills / db_entry.games
         db_entry.avgcsdenies = db_entry.csdenies / db_entry.games
 
+
+def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue):
+    status_queue.put('Attempting to decompress..')
+    data = decompress_replay(replay)
+    dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
+
+    # check if already uploaded
+    stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
+    md5 = get_hash(stats_bytes)
+    if check_if_replay_exists(md5):
+        game = get_game(md5, 'hash')
+        return "Replay already uploaded with Game ID: " + str(game['game_id'])
+
+    team1, team2, db_entries, new_db_entries, old_db_entries = get_teams_and_dbentries(dota_players)
+
+    if len(team1) != len(team2):
+        return "Not an equal amount of players on both teams."
+
+    # determine elo change
+    team1_win_elo_inc, team2_win_elo_inc = team_win_elos(team1, team2)
+    team1_avg_elo, team2_avg_elo = avg_team_elo(team1), avg_team_elo(team2)
+
+    t1_elo_change, t2_elo_change = teams_update_elo(team1, team2, winner)
+
+    # add up stats
+    add_dp_dbentries(dota_players, db_entries, winner)
+
     # structure statistics return message
     winner = ['Sentinel', 'Scourge'][winner-1]
-    msg = "```Winner: " + winner + ', ' + str(mins) + 'm, ' + str(secs) + 's, elo ratio (' +\
-          str(round(team1_win_elo_inc, 1)) + '/' + str(round(team2_win_elo_inc, 1)) + ')\n'
 
-    team1_dp = [dota_player for dota_player in dota_players if dota_player.team == 1]
-    team2_dp = [dota_player for dota_player in dota_players if dota_player.team == 2]
-
-    msg += 'sentinel avg elo: ' + str(round(team1_avg_elo, 1)) + '\n'
-    for dota_player in team1_dp:
-        msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
-                        dota_player.deaths, 4, dota_player.assists, 4) + '\n'
-    msg += 'scourge avg elo: ' + str(round(team2_avg_elo, 1)) + '\n'
-    for dota_player in team2_dp:
-        msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
-                        dota_player.deaths, 4, dota_player.assists, 4) + '\n'
-
-    msg += "```"
+    msg = structure_game_msg(winner, mins, secs, team1_win_elo_inc, team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo)
 
     msg += "!confirm or !discard"
     status_queue.put(msg)
 
     while True:
-        time.sleep(1)
-        if status.request is 'discard':
+        request = status.request_queue.get()
+        if request is 'discard':
             return "Discarded the replay."
-        elif status.request is 'confirm':
+        elif request is 'confirm':
             break
 
     #status_queue.put("Uploading to db..")
@@ -349,37 +324,15 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
 
         game_id = game_entry['LAST_INSERT_ID()']
 
-        # for new_db_entries
-        for db_entry in new_db_entries:
-            response = insert_player(db_entry.get_hm())
-            db_entry.player_id = response['LAST_INSERT_ID()']
-
-        for db_entry in new_db_entries + old_db_entries:
-            insert_player_game({
-                'player_id': db_entry.player_id,
-                'game_id': game_id,
-                'slot_nr': db_entry.dota_player.slot_order, #until blizzard fixes slot_nr
-                'elo_before': db_entry.old_elo,
-                'kills': db_entry.dota_player.kills,
-                'deaths': db_entry.dota_player.deaths,
-                'assists': db_entry.dota_player.assists,
-                'cskills': db_entry.dota_player.cskills,
-                'csdenies': db_entry.dota_player.csdenies
-            })
-
-        # for old_db_entries
-        for db_entry in old_db_entries:
-            update_player(db_entry.get_hm(), 'player_id')
+        put_entries_in_db(game_id, new_db_entries, old_db_entries)
 
     except pymysql.err.IntegrityError as e:
         return str(e)
 
     rank_players(status)
-    transfer_db(status)
+    if REMOTE_DB:
+        transfer_db(status)
     return "Replay uploaded to db. Game ID: " + str(game_id)
-
-
-
 
 
 def list_last_games(nr):
@@ -411,7 +364,8 @@ def rank_game(game_id, status):
     # ignore current game and recalculate for all after
     recalculate_elo_from_game(upload_time, status=status)
     rank_players(status)
-    transfer_db(status)
+    if REMOTE_DB:
+        transfer_db(status)
     return "done"
 
 
@@ -431,7 +385,8 @@ def unrank_game(game_id, status):
 
     recalculate_elo_from_game(upload_time, status=status)
     rank_players(status)
-    transfer_db(status)
+    if REMOTE_DB:
+        transfer_db(status)
     return "done"
 
 
@@ -445,8 +400,6 @@ def rollback_to(game, status=None):
             status.progress = "Rolling back.. " + slash_delimited(n, len(games))
         reset_stats_of_latest_game(g['game_id'])
         n += 1
-
-
 
 
 def recalculate_elo_from_game(upload_time, status=None):
@@ -590,6 +543,30 @@ def cleard_db():
     commit(sql, ())
 
 
+def put_entries_in_db(game_id, new_db_entries, old_db_entries):
+    # for new_db_entries
+    for db_entry in new_db_entries:
+        response = insert_player(db_entry.get_hm())
+        db_entry.player_id = response['LAST_INSERT_ID()']
+
+    for db_entry in new_db_entries + old_db_entries:
+        insert_player_game({
+            'player_id': db_entry.player_id,
+            'game_id': game_id,
+            'slot_nr': db_entry.dota_player.slot_order,  # until blizzard fixes slot_nr
+            'elo_before': db_entry.old_elo,
+            'kills': db_entry.dota_player.kills,
+            'deaths': db_entry.dota_player.deaths,
+            'assists': db_entry.dota_player.assists,
+            'cskills': db_entry.dota_player.cskills,
+            'csdenies': db_entry.dota_player.csdenies
+        })
+
+        # for old_db_entries
+        for db_entry in old_db_entries:
+            update_player(db_entry.get_hm(), 'player_id')
+
+
 def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
     # parse
     data = decompress_replay(replay)
@@ -602,29 +579,7 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
         game = get_game(md5, 'hash')
         return "Replay already uploaded with Game ID: " + str(game['game_id'])
 
-    team1 = []
-    team2 = []
-    db_entries = []
-    new_db_entries = []
-    old_db_entries = []
-    for dota_player in dota_players:
-        dota_player.name = dota_player.name.lower()
-        db_entry = get_player(dota_player.name) #get_player_from_db(dota_player.name)
-        if db_entry is None:
-            db_entry = DBEntry(dota_player)
-            new_db_entries += [db_entry]
-        else:
-            db_entry = DBEntry(db_entry)
-            old_db_entries += [db_entry]
-
-        db_entry.old_elo = db_entry.elo
-
-        if dota_player.team == 1:
-            team1 += [db_entry]
-        elif dota_player.team == 2:
-            team2 += [db_entry]
-
-        db_entries += [db_entry]
+    team1, team2, db_entries, new_db_entries, old_db_entries = get_teams_and_dbentries(dota_players)
 
     if len(team1) != len(team2):
         return "Not an equal amount of players on both teams."
@@ -633,103 +588,51 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
     team1_win_elo_inc, team2_win_elo_inc = team_win_elos(team1, team2)
     team1_avg_elo, team2_avg_elo = avg_team_elo(team1), avg_team_elo(team2)
 
-
-    msg = '```Winner: ?, ? mins, ? secs, elo ratio (' + \
-          str(round(team1_win_elo_inc, 1)) + '/' + str(round(team2_win_elo_inc, 1)) + ')\n'
-
-    team1_dp = [dota_player for dota_player in dota_players if dota_player.team == 1]
-    team2_dp = [dota_player for dota_player in dota_players if dota_player.team == 2]
-
-    msg += 'sentinel avg elo: ' + str(round(team1_avg_elo, 1)) + '\n'
-    for dota_player in team1_dp:
-        msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
-                        dota_player.deaths, 4, dota_player.assists, 4) + '\n'
-    msg += 'scourge avg elo: ' + str(round(team2_avg_elo, 1)) + '\n'
-    for dota_player in team2_dp:
-        msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
-                        dota_player.deaths, 4, dota_player.assists, 4) + '\n'
-    msg += "```"
-
+    msg = structure_game_msg('?', '?', '?', team1_win_elo_inc, team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo)
 
     #send preliminary message
     msg += "!discard or !manual winner mins secs"
     status_queue.put(msg)
 
     while True:
-        time.sleep(1)
-        if status.request is None:
-            pass
-        elif status.request is 'discard':
+        request = status.request_queue.get()
+
+        if request is 'discard':
             return "Discarded the replay."
-        elif status.request[0] is 'manual':
-            winner = status.request[1]
+        elif request[0] is 'manual':
+            winner = request[1]
             if winner.lower() == "sentinel":
                 winner = 1
             elif winner.lower() == 'scourge':
                 winner = 2
             else:
                 status_queue.put("winner: sentinel or scourge")
-                status.request = None
                 continue
             try:
-                mins = int(status.request[2])
-                secs = int(status.request[3])
+                mins = int(request[2])
+                secs = int(request[3])
                 break
             except ValueError:
                 status_queue.put("like: !manual sentinel 34 3")
-                status.request = None
 
     t1_elo_change, t2_elo_change = teams_update_elo(team1, team2, winner)
 
     # add up stats
-    for n in range(len(dota_players)):
-        dota_player = dota_players[n]
-        db_entry = db_entries[n]
-        db_entry.games += 1
-        if dota_player.team == winner:
-            db_entry.wins += 1
-        else:
-            db_entry.loss += 1
-        db_entry.dota_player = dota_player
-        db_entry.kills += dota_player.kills
-        db_entry.deaths += dota_player.deaths
-        db_entry.assists += dota_player.assists
-        db_entry.cskills += dota_player.cskills
-        db_entry.csdenies += dota_player.csdenies
-        db_entry.avgkills = db_entry.kills / db_entry.games
-        db_entry.avgdeaths = db_entry.deaths / db_entry.games
-        db_entry.avgassists = db_entry.assists / db_entry.games
-        db_entry.avgcskills = db_entry.cskills / db_entry.games
-        db_entry.avgcsdenies = db_entry.csdenies / db_entry.games
+    add_dp_dbentries(dota_players, db_entries, winner)
 
     # structure statistics return message
     winner = ['Sentinel', 'Scourge'][winner - 1]
-    msg = "```Winner: " + winner + ', ' + str(mins) + 'm, ' + str(secs) + 's, elo ratio (' + \
-          str(round(team1_win_elo_inc, 1)) + '/' + str(round(team2_win_elo_inc, 1)) + ')\n'
 
-    team1_dp = [dota_player for dota_player in dota_players if dota_player.team == 1]
-    team2_dp = [dota_player for dota_player in dota_players if dota_player.team == 2]
-
-    msg += 'sentinel avg elo: ' + str(round(team1_avg_elo, 1)) + '\n'
-    for dota_player in team1_dp:
-        msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
-                        dota_player.deaths, 4, dota_player.assists, 4) + '\n'
-    msg += 'scourge avg elo: ' + str(round(team2_avg_elo, 1)) + '\n'
-    for dota_player in team2_dp:
-        msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
-                        dota_player.deaths, 4, dota_player.assists, 4) + '\n'
-
-    msg += "```"
+    msg = structure_game_msg(winner, mins, secs, team1_win_elo_inc, team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo)
 
     msg += "!confirm or !discard"
     status_queue.put(msg)
 
-    status.request = None
     while True:
-        time.sleep(1)
-        if status.request is 'discard':
+        request = status.request_queue.get()
+        if request is 'discard':
             return "Discarded the replay."
-        elif status.request is 'confirm':
+        elif request is 'confirm':
             break
 
     status_queue.put("Uploading to db..")
@@ -756,50 +659,18 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
 
         game_id = game_entry['LAST_INSERT_ID()']
 
-        # for new_db_entries
-        for db_entry in new_db_entries:
-            response = insert_player(db_entry.get_hm())
-            db_entry.player_id = response['LAST_INSERT_ID()']
-
-        for db_entry in new_db_entries + old_db_entries:
-            insert_player_game({
-                'player_id': db_entry.player_id,
-                'game_id': game_id,
-                'slot_nr': db_entry.dota_player.slot_order,  # until blizzard fixes slot_nr
-                'elo_before': db_entry.old_elo,
-                'kills': db_entry.dota_player.kills,
-                'deaths': db_entry.dota_player.deaths,
-                'assists': db_entry.dota_player.assists,
-                'cskills': db_entry.dota_player.cskills,
-                'csdenies': db_entry.dota_player.csdenies
-            })
-
-        # for old_db_entries
-        for db_entry in old_db_entries:
-            update_player(db_entry.get_hm(), 'player_id')
+        put_entries_in_db(game_id, new_db_entries, old_db_entries)
 
     except pymysql.err.IntegrityError as e:
         return str(e)
 
     rank_players(status)
-    transfer_db(status)
+    if REMOTE_DB:
+        transfer_db(status)
     return "Replay uploaded to db. Game ID: " + str(game_id)
 
 
-def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=None):
-    # parse
-    data = decompress_replay(replay)
-
-    try:
-        dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
-    except NotCompleteGame:
-        dota_players, mode, unparsed = parse_incomplete_game(data)
-        if winner is None:
-            raise Exception('auto_replay_upload incomplete replay with no given arguments')
-
-    stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
-    md5 = get_hash(stats_bytes)
-
+def get_teams_and_dbentries(dota_players):
     team1 = []
     team2 = []
     db_entries = []
@@ -823,41 +694,37 @@ def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=
             team2 += [db_entry]
 
         db_entries += [db_entry]
+    return team1, team2, db_entries, new_db_entries, old_db_entries
+
+def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=None):
+    # parse
+    data = decompress_replay(replay)
+
+    try:
+        dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
+    except NotCompleteGame:
+        dota_players, mode, unparsed = parse_incomplete_game(data)
+        if winner is None:
+            raise Exception('auto_replay_upload incomplete replay with no given arguments')
+
+    stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
+    md5 = get_hash(stats_bytes)
+
+    team1, team2, db_entries, new_db_entries, old_db_entries = get_teams_and_dbentries(dota_players)
 
     if len(team1) != len(team2) != 5:
         raise Exception('Not 5x5 game')
 
     # determine elo change
-    team1_win_elo_inc, team2_win_elo_inc = team_win_elos(team1, team2)
     team1_avg_elo, team2_avg_elo = avg_team_elo(team1), avg_team_elo(team2)
 
     t1_elo_change, t2_elo_change = teams_update_elo(team1, team2, winner)
 
     # add up stats
-    for n in range(len(dota_players)):
-        dota_player = dota_players[n]
-        db_entry = db_entries[n]
-        db_entry.games += 1
-        if dota_player.team == winner:
-            db_entry.wins += 1
-        else:
-            db_entry.loss += 1
-        db_entry.dota_player = dota_player
-        db_entry.kills += dota_player.kills
-        db_entry.deaths += dota_player.deaths
-        db_entry.assists += dota_player.assists
-        db_entry.cskills += dota_player.cskills
-        db_entry.csdenies += dota_player.csdenies
-        db_entry.avgkills = db_entry.kills / db_entry.games
-        db_entry.avgdeaths = db_entry.deaths / db_entry.games
-        db_entry.avgassists = db_entry.assists / db_entry.games
-        db_entry.avgcskills = db_entry.cskills / db_entry.games
-        db_entry.avgcsdenies = db_entry.csdenies / db_entry.games
+    add_dp_dbentries(dota_players, db_entries, winner)
 
     # structure statistics return message
     winner = ['Sentinel', 'Scourge'][winner - 1]
-
-    # yyyymmdd_xxhxxmxxs_incomplete_winner_mins_secs_hash.w3g
 
     try:
         game_entry = insert_game(
@@ -876,27 +743,7 @@ def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=
 
         game_id = game_entry['LAST_INSERT_ID()']
 
-        # for new_db_entries
-        for db_entry in new_db_entries:
-            response = insert_player(db_entry.get_hm())
-            db_entry.player_id = response['LAST_INSERT_ID()']
-
-        for db_entry in new_db_entries + old_db_entries:
-            insert_player_game({
-                'player_id': db_entry.player_id,
-                'game_id': game_id,
-                'slot_nr': db_entry.dota_player.slot_order,  # until blizzard fixes slot_nr
-                'elo_before': db_entry.old_elo,
-                'kills': db_entry.dota_player.kills,
-                'deaths': db_entry.dota_player.deaths,
-                'assists': db_entry.dota_player.assists,
-                'cskills': db_entry.dota_player.cskills,
-                'csdenies': db_entry.dota_player.csdenies
-            })
-
-        # for old_db_entries
-        for db_entry in old_db_entries:
-            update_player(db_entry.get_hm(), 'player_id')
+        put_entries_in_db(game_id, new_db_entries, old_db_entries)
 
     except pymysql.err.IntegrityError as e:
         return str(e)
@@ -973,22 +820,22 @@ def reupload_all_replays(status:Status, status_queue: queue.Queue):
         f.close()
 
         parts = file.split('_')
-        date_and_time = parts[0] + '_' + parts[1]
+        date_and_time = parts[0] + '_' + parts[1] #date, time
         if parts[3] is 'Sentinel':
             winner = 1
         elif parts[3] is 'Scourge':
             winner = 2
         else:
-            return "Stopped at a bad filename: " + file
-        if parts[4] == 'none':
-            return "Stopped at an incomplete replay: " + file
+            return "Stopped at a bad filename: " + file + " at " + parts[3]
+
         mins = int(parts[4])
         secs = int(parts[5])
         auto_replay_upload(data, date_and_time, winner, mins, secs)
         n+=1
 
     rank_players(status)
-    transfer_db(status)
+    if REMOTE_DB:
+        transfer_db(status)
     return str(n) + ' replays uploaded.'
 
 
@@ -1018,37 +865,15 @@ def delete_replay(game_id):
     return "Replay file on disk not found."
 
 
-async def timer_loop():
-    start = time.perf_counter() 
-    Client.uptime = 0
-    f = open('uptime_log.txt', 'w')
-    print(int(time.time()), Client.uptime, file=f)
-    f.close()
-    
-    while True:
-        Client.uptime += 1
-        now = time.perf_counter() - start
-        #print('now', now)
-        
-        if Client.uptime > now:
-            f = open('uptime_log.txt', 'a')
-            print(int(time.time()), Client.uptime, file=f)
-            f.close()
-            await asyncio.sleep(Client.uptime - now)
 
-    
 
 class Client(discord.Client):
-    uptime = 0
     player_queue = []
-    timer_queue = {}
-    current_replay_upload = None
+    current_replay_upload = []
     lock = False
-
 
     async def on_ready(self):
         print('Logged on as', self.user)
-
 
     async def on_resumed(self):
         print("resumed..")
@@ -1074,11 +899,11 @@ class Client(discord.Client):
         if command == '!sd':
             await self.sd_handler(message, payload)
         elif command == '!confirm':
-            await self.confirm_replay_handler(message, payload)
+            await self.confirm_replay_handler(message)
         elif command == '!discard':
-            await self.discard_replay_handler(message, payload)
+            await self.discard_replay_handler(message)
         elif command == '!force_discard' and admin:
-            await self.force_discard_replay_handler(message, payload)
+            await self.force_discard_replay_handler(message)
         elif command == '!manual' and payload:
             await self.manual_replay_handler(message, payload)
         elif command == '!list':
@@ -1198,7 +1023,7 @@ class Client(discord.Client):
             await message.channel.send(t1.rv)
 
         Client.lock = False
-        Client.current_replay_upload = None
+        Client.current_replay_upload = []
 
     @staticmethod
     async def manual_input_replay_handler(message: discord.message.Message, data):
@@ -1213,36 +1038,36 @@ class Client(discord.Client):
                 await message.channel.send(status_queue.get_nowait())
             await asyncio.sleep(0.1)
 
-        while not status_queue.empty():  # can maybe make prettier
+        while not status_queue.empty():
             await message.channel.send(status_queue.get_nowait())
 
         if t1.exception:
             Client.lock = False
-            Client.current_replay_upload = None
+            Client.current_replay_upload = []
             raise t1.exception
         else:
             await message.channel.send(t1.rv)
 
         Client.lock = False
-        Client.current_replay_upload = None
+        Client.current_replay_upload = []
 
     @staticmethod
-    async def confirm_replay_handler(message: discord.message.Message, payload=None):
+    async def confirm_replay_handler(message: discord.message.Message):
         if message.author in Client.current_replay_upload:
             _, _, status = Client.current_replay_upload
-            status.request = 'confirm'
+            status.request_queue.put('confirm')
 
     @staticmethod
-    async def discard_replay_handler(message: discord.message.Message, payload=None):
+    async def discard_replay_handler(message: discord.message.Message):
         if message.author in Client.current_replay_upload:
             _, _, status = Client.current_replay_upload
-            status.request = 'discard'
+            status.request_queue.put('discard')
 
     @staticmethod
-    async def force_discard_replay_handler(message: discord.message.Message, payload=None):
+    async def force_discard_replay_handler(message: discord.message.Message):
         if Client.current_replay_upload:
             _, _, status = Client.current_replay_upload
-            status.request = 'discard'
+            status.request_queue.put('discard')
         else:
             await message.channel.send("No replay to discard")
 
@@ -1253,8 +1078,7 @@ class Client(discord.Client):
                 await message.channel.send("!manual needs 3 arguments")
                 return
             _, _, status = Client.current_replay_upload
-            status.request = ('manual', payload[0], payload[1], payload[2])
-
+            status.request_queue.put(('manual', payload[0], payload[1], payload[2]))
     @staticmethod
     async def sd_handler(message: discord.message.Message, payload=None):
         if payload is None:
@@ -1432,7 +1256,5 @@ class Client(discord.Client):
         quit()
 
 
-start_time = time.perf_counter()
 client = Client()
-client.loop.create_task(timer_loop())
 client.run(keys.TOKEN)
