@@ -21,7 +21,6 @@ import os
 import pymysql
 from transferer import transfer_db
 
-REMOTE_DB = False
 
 
 class Status:
@@ -330,7 +329,7 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
         return str(e)
 
     rank_players(status)
-    if REMOTE_DB:
+    if keys.REMOTE_DB:
         transfer_db(status)
     return "Replay uploaded to db. Game ID: " + str(game_id)
 
@@ -364,7 +363,7 @@ def rank_game(game_id, status):
     # ignore current game and recalculate for all after
     recalculate_elo_from_game(upload_time, status=status)
     rank_players(status)
-    if REMOTE_DB:
+    if keys.REMOTE_DB:
         transfer_db(status)
     return "done"
 
@@ -385,7 +384,7 @@ def unrank_game(game_id, status):
 
     recalculate_elo_from_game(upload_time, status=status)
     rank_players(status)
-    if REMOTE_DB:
+    if keys.REMOTE_DB:
         transfer_db(status)
     return "done"
 
@@ -665,7 +664,7 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
         return str(e)
 
     rank_players(status)
-    if REMOTE_DB:
+    if keys.REMOTE_DB:
         transfer_db(status)
     return "Replay uploaded to db. Game ID: " + str(game_id)
 
@@ -821,9 +820,9 @@ def reupload_all_replays(status:Status, status_queue: queue.Queue):
 
         parts = file.split('_')
         date_and_time = parts[0] + '_' + parts[1] #date, time
-        if parts[3] is 'Sentinel':
+        if parts[3] == 'Sentinel':
             winner = 1
-        elif parts[3] is 'Scourge':
+        elif parts[3] == 'Scourge':
             winner = 2
         else:
             return "Stopped at a bad filename: " + file + " at " + parts[3]
@@ -834,7 +833,7 @@ def reupload_all_replays(status:Status, status_queue: queue.Queue):
         n+=1
 
     rank_players(status)
-    if REMOTE_DB:
+    if keys.REMOTE_DB:
         transfer_db(status)
     return str(n) + ' replays uploaded.'
 
