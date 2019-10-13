@@ -884,7 +884,7 @@ def delete_replay(game_id):
 
     game_id = game['game_id']
     for file in os.listdir('replays'):
-        if fnmatch.fnmatch(file, '*' + game['hash'] + '*.w3g'):
+        if fnmatch.fnmatch(file, game['upload_time'] + '*'):
             filepath = os.path.join("replays", file)
             os.remove(filepath)
 
@@ -979,7 +979,6 @@ def auto_upload_typed(lines, date_and_time, winner, mins, secs):
         db_entry.games += 1
         db_entry.old_elo = db_entry.elo
         if n < 5:
-            print(type(winner), winner)
             if winner == 'sentinel':
                 db_entry.wins += 1
             else:
@@ -1098,6 +1097,20 @@ def upload_typed_replay(payload: list, status: Status, status_queue: queue.Queue
        msg += '\n'
     msg += '```'
 
+
+    #confirm
+    msg += "!confirm or !discard"
+    status_queue.put(msg)
+
+    while True:
+        request = status.request_queue.get()
+        if request is 'discard':
+            return "Discarded the replay."
+        elif request is 'confirm':
+            break
+
+    status_queue.put("Uploading to db..")
+
     # save in database
     upload_time = unixtime_to_datetime(time.time())
     game_entry = insert_game(
@@ -1179,7 +1192,12 @@ def upload_typed_replay(payload: list, status: Status, status_queue: queue.Queue
          print('',k[n],d[n],a[n], end='', file=f)
       print(file=f)
     f.close()
-    return msg
+
+    rank_players(status)
+    if keys.REMOTE_DB:
+        transfer_db(status)
+    return "Replay uploaded to db. Game ID: " + str(game_id)
+    
 
 class Client(discord.Client):
     player_queue = []
@@ -1369,6 +1387,15 @@ class Client(discord.Client):
 
     @staticmethod
     async def upload_typed_replay_handler(message: discord.message.Message, payload):
+        if Client.current_replay_upload:
+            author = Client.current_replay_upload[0]
+            await message.channel.send('{0.mention} !confirm or !discard previous replay'.format(author))
+            return
+        elif Client.lock:
+            await message.channel.send("db is currently locked")
+            return
+        Client.lock = True
+
         status_queue = queue.Queue()
         status = Status()
         t1 = ThreadAnything(upload_typed_replay, (payload,), status=status, status_queue=status_queue)
