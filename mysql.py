@@ -167,8 +167,24 @@ def update_player_game(player_game):
 
 
 
+testgame = {
+            'mode': 'cdzm',
+            'winner': 'scourge',
+            'duration': 2000,
+            'upload_time': '12345678_01h02m03s',
+            'ranked': 2,
+            'hash': None,
+            'team1_elo': 1050.0,
+            'team2_elo': 1025.0,
+            'team1_elo_change': 25.0,
+            'elo_alg': '1.0'
+        }
+
+
 if __name__ == '__main__':
-    pass
+    insert_game(testgame)
+    #game = get_game(2)
+    #print(game)
 
 
 """

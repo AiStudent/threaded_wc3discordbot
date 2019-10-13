@@ -125,6 +125,8 @@ class DBEntry:
             self.name = de['name']
             self.elo = de['elo']
             self.games = de['games']
+            self.kdagames = de['kdagames']
+            self.csgames = de['csgames']            
             self.wins = de['wins']
             self.loss = de['loss']
             self.draw = de['draw']
@@ -138,11 +140,16 @@ class DBEntry:
             self.avgassists = de['avgassists']
             self.avgcskills = de['avgcskills']
             self.avgcsdenies = de['avgcsdenies']
-        if isinstance(de, DotaPlayer):
+        if isinstance(de, DotaPlayer) or isinstance(de, str):
             self.player_id = None
-            self.name = de.name
+            if isinstance(de, DotaPlayer):
+               self.name = de.name
+            else:
+               self.name = de
             self.elo = 1000.0
             self.games = 0
+            self.kdagames = 0
+            self.csgames = 0            
             self.wins = 0
             self.loss = 0
             self.draw = 0
@@ -162,6 +169,8 @@ class DBEntry:
             'name': self.name,
             'elo': self.elo,
             'games': self.games,
+            'kdagames': self.kdagames,
+            'csgames': self.csgames,
             'wins': self.wins,
             'loss': self.loss,
             'draw': self.draw,
@@ -240,6 +249,8 @@ def add_dp_dbentries(dota_players, db_entries, winner):
         dota_player = dota_players[n]
         db_entry = db_entries[n]
         db_entry.games += 1
+        db_entry.kdagames += 1
+        db_entry.csgames += 1
         if dota_player.team == winner:
             db_entry.wins += 1
         else:
@@ -250,11 +261,11 @@ def add_dp_dbentries(dota_players, db_entries, winner):
         db_entry.assists += dota_player.assists
         db_entry.cskills += dota_player.cskills
         db_entry.csdenies += dota_player.csdenies
-        db_entry.avgkills = db_entry.kills / db_entry.games
-        db_entry.avgdeaths = db_entry.deaths / db_entry.games
-        db_entry.avgassists = db_entry.assists / db_entry.games
-        db_entry.avgcskills = db_entry.cskills / db_entry.games
-        db_entry.avgcsdenies = db_entry.csdenies / db_entry.games
+        db_entry.avgkills = db_entry.kills / db_entry.kdagames
+        db_entry.avgdeaths = db_entry.deaths / db_entry.kdagames
+        db_entry.avgassists = db_entry.assists / db_entry.kdagames
+        db_entry.avgcskills = db_entry.cskills / db_entry.csgames
+        db_entry.avgcsdenies = db_entry.csdenies / db_entry.csgames
 
 
 def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue):
@@ -284,7 +295,7 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     add_dp_dbentries(dota_players, db_entries, winner)
 
     # structure statistics return message
-    winner = ['Sentinel', 'Scourge'][winner-1]
+    winner = ['sentinel', 'scourge'][winner-1]
 
     msg = structure_game_msg(winner, mins, secs, team1_win_elo_inc, team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo)
 
@@ -301,7 +312,7 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     #status_queue.put("Uploading to db..")
     status.progress = "Uploading to local db"
 
-    date_and_time = datetime.now().strftime("%Y%m%d_%Hh%Mm%Ss")
+    date_and_time = unixtime_to_datetime(time.time())
     #yyyymmdd_xxhxxmxxs_complete_winner_mins_secs_hash
     filename = date_and_time + '_complete_' + winner + '_' + str(mins) + '_' + str(secs) + '_' + md5
     save_file(replay, filename)
@@ -314,6 +325,8 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
                 'upload_time': date_and_time,
                 'hash': md5,
                 'ranked': 1,
+                'withkda': 1,
+                'withcs' : 1,
                 'team1_elo': team1_avg_elo,
                 'team2_elo': team2_avg_elo,
                 'team1_elo_change': t1_elo_change,
@@ -425,13 +438,13 @@ def recalculate_elo_from_game(upload_time, status=None):
             p = get_player_id(pg['player_id'])
             if pg['slot_nr'] < 5:
                 team1 += [p]
-                if winner == 'Sentinel':
+                if winner == 'sentinel':
                     p['wins'] += 1
                 else:
                     p['loss'] += 1
             else:
                 team2 += [p]
-                if winner == 'Scourge':
+                if winner == 'scourge':
                     p['wins'] += 1
                 else:
                     p['loss'] += 1
@@ -439,16 +452,20 @@ def recalculate_elo_from_game(upload_time, status=None):
             pg['elo_before'] = p['elo']
             update_player_game(pg)
             p['games'] += 1
-            p['kills'] += pg['kills']
-            p['deaths'] += pg['deaths']
-            p['assists'] += pg['assists']
-            p['cskills'] += pg['cskills']
-            p['csdenies'] += pg['csdenies']
-            p['avgkills'] = p['kills'] / p['games']
-            p['avgdeaths'] = p['deaths'] / p['games']
-            p['avgassists'] = p['assists'] / p['games']
-            p['avgcskills'] = p['avgcskills'] / p['games']
-            p['avgcsdenies'] = p['avgcsdenies'] / p['games']
+            if game['withkda'] == 1:
+                p['kdagames'] += 1
+                p['kills'] += pg['kills']
+                p['deaths'] += pg['deaths']
+                p['assists'] += pg['assists']
+                p['avgkills'] = p['kills'] / p['kdagames']
+                p['avgdeaths'] = p['deaths'] / p['kdagames']
+                p['avgassists'] = p['assists'] / p['kdagames']
+            if game['withcs'] == 1:
+                p['csgames'] += 1
+                p['cskills'] += pg['cskills']
+                p['csdenies'] += pg['csdenies']
+                p['avgcskills'] = p['avgcskills'] / p['csgames']
+                p['avgcsdenies'] = p['avgcsdenies'] / p['csgames']
 
         # set game teams avg elo
         team1_avg_elo = avg_team_elo_dict(team1)
@@ -460,7 +477,7 @@ def recalculate_elo_from_game(upload_time, status=None):
         team1_win_elo, team2_win_elo = team_win_elos_dict(team1_avg_elo, team2_avg_elo)
 
         # set game teams_elo_change
-        if winner == 'Sentinel':
+        if winner == 'sentinel':
             game['team1_elo_change'] = team1_win_elo
             for p in team1:
                 p['elo'] += team1_win_elo
@@ -495,7 +512,7 @@ def reset_stats_of_latest_game(game_id):
     pgs = fetchall(sql, game_id)
     for pg in pgs:
         p = get_player_id(pg['player_id'])
-        if game['winner'] == 'Sentinel':
+        if game['winner'] == 'sentinel':
             if pg['slot_nr'] < 5:
                 p['wins'] -= 1
             else:
@@ -506,26 +523,33 @@ def reset_stats_of_latest_game(game_id):
             else:
                 p['loss'] -= 1
 
+        
         p['games'] -= 1
-
         p['elo'] = pg['elo_before']
-        p['kills'] -= pg['kills']
-        p['deaths'] -= pg['deaths']
-        p['assists'] -= pg['assists']
-        p['cskills'] -= pg['cskills']
-        p['csdenies'] -= pg['csdenies']
-        if p['games'] > 0:
-            p['avgkills'] = p['kills'] / p['games']
-            p['avgdeaths'] = p['deaths'] / p['games']
-            p['avgassists'] = p['assists'] / p['games']
-            p['avgcskills'] = p['avgcskills'] / p['games']
-            p['avgcsdenies'] = p['avgcsdenies'] / p['games']
+        if game['withkda'] == 1:
+            p['kdagames'] -= 1
+            p['kills'] -= pg['kills']
+            p['deaths'] -= pg['deaths']
+            p['assists'] -= pg['assists']
+        if game['withcs'] == 1:
+            p['csgames'] -= 1
+            p['cskills'] -= pg['cskills']
+            p['csdenies'] -= pg['csdenies']
+        if p['kdagames'] > 0:
+            p['avgkills'] = p['kills'] / p['kdagames']
+            p['avgdeaths'] = p['deaths'] / p['kdagames']
+            p['avgassists'] = p['assists'] / p['kdagames']
         else:
             p['avgkills'] = 0
             p['avgdeaths'] = 0
             p['avgassists'] = 0
+        if p['csgames'] > 0:
+            p['avgcskills'] = p['avgcskills'] / p['csgames']
+            p['avgcsdenies'] = p['avgcsdenies'] / p['csgames']
+        else:
             p['avgcskills'] = 0
             p['avgcsdenies'] = 0
+        
         update_player(p)
 
 
@@ -620,7 +644,7 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
     add_dp_dbentries(dota_players, db_entries, winner)
 
     # structure statistics return message
-    winner = ['Sentinel', 'Scourge'][winner - 1]
+    winner = ['sentinel', 'scourge'][winner - 1]
 
     msg = structure_game_msg(winner, mins, secs, team1_win_elo_inc, team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo)
 
@@ -636,7 +660,7 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
 
     status_queue.put("Uploading to db..")
 
-    date_and_time = datetime.now().strftime("%Y%m%d_%Hh%Mm%Ss")
+    date_and_time = unixtime_to_datetime(time.time())
     # yyyymmdd_xxhxxmxxs_incomplete_winner_mins_secs_hash.w3g
     filename = date_and_time + '_incomplete_' + winner + '_' + str(mins) + '_' + str(secs) + '_' + md5
     save_file(replay, filename)
@@ -649,6 +673,8 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
              'upload_time': date_and_time,
              'hash': md5,
              'ranked': 1,
+             'withkda' : 1,
+             'withcs' : 1,
              'team1_elo': team1_avg_elo,
              'team2_elo': team2_avg_elo,
              'team1_elo_change': t1_elo_change,
@@ -723,7 +749,7 @@ def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=
     add_dp_dbentries(dota_players, db_entries, winner)
 
     # structure statistics return message
-    winner = ['Sentinel', 'Scourge'][winner - 1]
+    winner = ['sentinel', 'scourge'][winner - 1]
 
     try:
         game_entry = insert_game(
@@ -733,6 +759,8 @@ def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=
              'upload_time': date_and_time,
              'hash': md5,
              'ranked': 1,
+             'withkda': 1,
+             'withcs': 1,
              'team1_elo': team1_avg_elo,
              'team2_elo': team2_avg_elo,
              'team1_elo_change': t1_elo_change,
@@ -801,8 +829,10 @@ def show_game(game_id):
 
     for pg in player_games[5:]:
         name = get_player_id(pg['player_id'])['name']
-        msg += strwidth(name, 15, pg['kills'], 4,
-                        pg['deaths'], 4, pg['assists'], 4) + '\n'
+        msg += strwidth(name, 15)
+        if game['withkda'] == 1:
+            msg += strwidth(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
+        msg += '\n'
     msg += "```"
     return msg
 
@@ -814,22 +844,29 @@ def reupload_all_replays(status:Status, status_queue: queue.Queue):
     files = sorted(os.listdir('replays'))
     for file in files:
         status.progress = 'Uploading ' + slash_delimited(n+1, len(files))
-        f = open('replays/' + file, 'rb')
-        data = f.read()
-        f.close()
-
-        parts = file.split('_')
+        
+        parts = file[:-4].split('_')
         date_and_time = parts[0] + '_' + parts[1] #date, time
-        if parts[3] == 'Sentinel':
+        if parts[3] == 'sentinel':
             winner = 1
-        elif parts[3] == 'Scourge':
+        elif parts[3] == 'scourge':
             winner = 2
         else:
             return "Stopped at a bad filename: " + file + " at " + parts[3]
-
         mins = int(parts[4])
-        secs = int(parts[5])
-        auto_replay_upload(data, date_and_time, winner, mins, secs)
+        secs = int(parts[5])    
+        
+        if parts[2] == 'incomplete' or parts[2] == 'complete':
+            f = open('replays/' + file, 'rb')
+            data = f.read()
+            f.close()        
+            auto_replay_upload(data, date_and_time, winner, mins, secs)
+        elif parts[2] == 'custom':
+            f = open('replays/' + file, 'r')
+            lines = f.readlines()
+            f.close()          
+            winner = ['sentinel', 'scourge'][winner-1]
+            auto_upload_typed(lines, date_and_time, winner, mins, secs)
         n+=1
 
     rank_players(status)
@@ -864,7 +901,285 @@ def delete_replay(game_id):
     return "Replay file on disk not found."
 
 
+def unixtime_to_datetime(ut):
+    return datetime.utcfromtimestamp(ut).strftime('%Y%m%d_%Hh%Mm%Ss')
 
+
+def auto_upload_typed(lines, date_and_time, winner, mins, secs):
+    withkda = withcs = False
+    longline = ""
+    for line in lines:
+        longline += line + " "
+    words = longline.split()
+    if len(words) == 10:
+        player_names = [words[n] for n in range(0, 10, 1)]
+    elif len(words) == 40:
+        withkda = True
+        player_names = [words[n] for n in range(0,40,4)]
+        k = [int(words[n]) for n in range(1,40,4)]
+        d = [int(words[n]) for n in range(2,40,4)]
+        a = [int(words[n]) for n in range(3,40,4)]
+    else:
+        raise Exception('auto_upload_typed wrong nr of arguments')
+
+    # search in database
+    team1 = []
+    team2 = []
+    db_entries = []
+    new_db_entries = []
+    old_db_entries = []
+    for n in range(10):
+        player_name = player_names[n].lower()
+        db_entry = get_player(player_name)
+        if db_entry is None:
+            db_entry = DBEntry(player_name)
+            new_db_entries += [db_entry]
+        else:
+            db_entry = DBEntry(db_entry)
+            old_db_entries += [db_entry]
+
+        db_entry.old_elo = db_entry.elo
+
+        if n < 5:
+            team1 += [db_entry]
+        else:
+            team2 += [db_entry]
+
+        db_entries += [db_entry]
+    
+    # determine elo change
+    team1_win_elo_inc, team2_win_elo_inc = team_win_elos(team1, team2)
+    team1_avg_elo, team2_avg_elo = avg_team_elo(team1), avg_team_elo(team2)
+    t1_elo_change, t2_elo_change = teams_update_elo(team1, team2, winner)
+
+
+    # save in database
+    upload_time = unixtime_to_datetime(time.time())
+    game_entry = insert_game(
+        {
+            'mode': None,
+            'winner': winner,
+            'duration': (60*mins+secs),
+            'upload_time': upload_time,
+            'ranked': 1,
+            'withkda': withkda,
+            'withcs': withcs,
+            'hash': None,
+            'team1_elo': team1_avg_elo,
+            'team2_elo': team2_avg_elo,
+            'team1_elo_change': t1_elo_change,
+            'elo_alg': '1.0'
+        }
+    )
+    game_id = game_entry['LAST_INSERT_ID()']
+ 
+    # add player stats
+    for n in range(10):
+        db_entry = db_entries[n]
+        db_entry.games += 1
+        db_entry.old_elo = db_entry.elo
+        if n < 5:
+            print(type(winner), winner)
+            if winner == 'sentinel':
+                db_entry.wins += 1
+            else:
+                db_entry.loss += 1
+        else:
+            if winner == 'scourge':
+                db_entry.wins += 1
+            else:
+                db_entry.loss += 1
+
+        if withkda:
+            db_entry.kills += k[n]
+            db_entry.deaths += d[n]
+            db_entry.assists += a[n]
+            db_entry.kdagames += 1
+            db_entry.avgkills = db_entry.kills / db_entry.kdagames
+            db_entry.avgdeaths = db_entry.deaths / db_entry.kdagames
+            db_entry.avgassists = db_entry.assists / db_entry.kdagames
+ 
+
+    # insert new players
+    for db_entry in new_db_entries:
+        response = insert_player(db_entry.get_hm())
+        db_entry.player_id = response['LAST_INSERT_ID()']
+    for db_entry in old_db_entries:
+        update_player(db_entry.get_hm())
+
+    # pgs   
+    for n in range(10):
+        db_entry = db_entries[n]
+        if withkda:
+            insert_player_game({
+                'player_id': db_entry.player_id,
+                'game_id': game_id,
+                'slot_nr': n,
+                'elo_before': db_entry.old_elo,
+                'kills': k[n],
+                'deaths': d[n],
+                'assists': a[n]
+            })
+        else:
+            insert_player_game({
+                'player_id': db_entry.player_id,
+                'game_id': game_id,
+                'slot_nr': n,
+                'elo_before': db_entry.old_elo
+            })
+
+def upload_typed_replay(payload: list, status: Status, status_queue: queue.Queue):
+    withkda = withcs = False
+    if len(payload) == 13:
+        player_names = [payload[n] for n in range(3, 13, 1)]
+    elif len(payload) == 43:
+        withkda = True
+        player_names = [payload[n] for n in range(3,43,4)]
+        k = [int(payload[n]) for n in range(4,43,4)]
+        d = [int(payload[n]) for n in range(5,43,4)]
+        a = [int(payload[n]) for n in range(6,43,4)]
+    else:
+        return 'Need 13 arguments: winner mins secs player1 ... player10'
+    if len(set(player_names)) != 10:
+        return "Not 10 different player names"
+    winner = payload[0]
+    mins = int(payload[1])
+    secs = int(payload[2])
+
+
+    # get players, winner, mins, secs
+    # optional kda
+
+    # search in database
+    team1 = []
+    team2 = []
+    db_entries = []
+    new_db_entries = []
+    old_db_entries = []
+    for n in range(10):
+        player_name = player_names[n].lower()
+        db_entry = get_player(player_name)
+        if db_entry is None:
+            db_entry = DBEntry(player_name)
+            new_db_entries += [db_entry]
+        else:
+            db_entry = DBEntry(db_entry)
+            old_db_entries += [db_entry]
+
+        db_entry.old_elo = db_entry.elo
+        
+        if n < 5:
+            team1 += [db_entry]
+        else:
+            team2 += [db_entry]
+
+        db_entries += [db_entry]
+    
+    # determine elo change
+    team1_win_elo_inc, team2_win_elo_inc = team_win_elos(team1, team2)
+    team1_avg_elo, team2_avg_elo = avg_team_elo(team1), avg_team_elo(team2)
+    t1_elo_change, t2_elo_change = teams_update_elo(team1, team2, winner)
+
+    # confirm - note new players with (new?) to prevent spelling errors
+    msg = '```'
+    msg += 'Winner: ' + winner + ', ' + str(mins) +'m ' + str(secs) + 's elo: ('\
+           + str(round(team1_win_elo_inc,1)) + '/' + str(round(team2_win_elo_inc,1)) +')\n'
+    msg += 'sentinel elo: ' + str(team1_avg_elo) + '\n'
+    for n in range(10):
+       player_name = player_names[n]
+       msg += player_name
+       if player_name in [db_entry.name for db_entry in new_db_entries]:
+           msg += '(new?)'
+       if withkda:
+         msg += ' ' + str(k[n]) + ',' + str(d[n]) + ',' + str(a[n])
+       if n == 4:
+         msg += '\n--------\n'
+         msg += 'scourge elo: ' + str(team2_avg_elo)
+       msg += '\n'
+    msg += '```'
+
+    # save in database
+    upload_time = unixtime_to_datetime(time.time())
+    game_entry = insert_game(
+        {
+            'mode': None,
+            'winner': winner,
+            'duration': (60*mins+secs),
+            'upload_time': upload_time,
+            'ranked': 1,
+            'withkda': withkda,
+            'withcs': withcs,
+            'hash': None,
+            'team1_elo': team1_avg_elo,
+            'team2_elo': team2_avg_elo,
+            'team1_elo_change': t1_elo_change,
+            'elo_alg': '1.0'
+        }
+    )
+    game_id = game_entry['LAST_INSERT_ID()']
+ 
+    # add player stats
+    for n in range(10):
+        db_entry = db_entries[n]
+        db_entry.games += 1
+        if n < 5:
+            if winner == 'sentinel':
+                db_entry.wins += 1
+            else:
+                db_entry.loss += 1
+        else:
+            if winner == 'scourge':
+                db_entry.wins += 1
+            else:
+                db_entry.loss += 1
+        if withkda:
+            db_entry.kills += k[n]
+            db_entry.deaths += d[n]
+            db_entry.assists += a[n]
+            db_entry.kdagames += 1
+            db_entry.avgkills = db_entry.kills / db_entry.kdagames
+            db_entry.avgdeaths = db_entry.deaths / db_entry.kdagames
+            db_entry.avgassists = db_entry.assists / db_entry.kdagames
+ 
+
+    # insert new players
+    for db_entry in new_db_entries:
+        response = insert_player(db_entry.get_hm())
+        db_entry.player_id = response['LAST_INSERT_ID()']
+    for db_entry in old_db_entries:
+        update_player(db_entry.get_hm())
+
+    # pgs   
+    for n in range(10):
+        db_entry = db_entries[n]
+        if withkda:
+            insert_player_game({
+                'player_id': db_entry.player_id,
+                'game_id': game_id,
+                'slot_nr': n,
+                'elo_before': db_entry.old_elo,
+                'kills': k[n],
+                'deaths': d[n],
+                'assists': a[n]
+            })
+        else:
+            insert_player_game({
+                'player_id': db_entry.player_id,
+                'game_id': game_id,
+                'slot_nr': n,
+                'elo_before': db_entry.old_elo
+            })
+        
+    #save in a file
+    filename = upload_time + '_custom_' + winner + '_' + str(mins) + '_' + str(secs) + '.txt'
+    f = open('replays/' + filename, 'w')
+    for n in range(10):
+      print(player_names[n], end="", file=f)
+      if len(payload) == 43:
+         print('',k[n],d[n],a[n], end='', file=f)
+      print(file=f)
+    f.close()
+    return msg
 
 class Client(discord.Client):
     player_queue = []
@@ -919,6 +1234,8 @@ class Client(discord.Client):
             await self.show_game_handler(message, payload)
         elif command == '!reupload_all_replays' and admin:
             await self.reupload_all_replays_handler(message)
+        elif command == '!upload' and admin and payload:
+            await self.upload_typed_replay_handler(message, payload)
         elif command == '!delete' and payload and admin:
             await self.delete_replay_handler(message, payload)
         elif command == '!shutdown' and admin:
@@ -1043,6 +1360,33 @@ class Client(discord.Client):
         if t1.exception:
             Client.lock = False
             Client.current_replay_upload = []
+            raise t1.exception
+        else:
+            await message.channel.send(t1.rv)
+
+        Client.lock = False
+        Client.current_replay_upload = []
+
+    @staticmethod
+    async def upload_typed_replay_handler(message: discord.message.Message, payload):
+        status_queue = queue.Queue()
+        status = Status()
+        t1 = ThreadAnything(upload_typed_replay, (payload,), status=status, status_queue=status_queue)
+        Client.current_replay_upload = (message.author, t1, status)
+        t1.start()
+
+        while t1.is_alive():
+            while not status_queue.empty():
+                await message.channel.send(status_queue.get_nowait())
+            await asyncio.sleep(0.1)
+
+        while not status_queue.empty():
+            await message.channel.send(status_queue.get_nowait())
+
+        if t1.exception:
+            Client.lock = False
+            Client.current_replay_upload = []
+            await message.channel.send(t1.exception)
             raise t1.exception
         else:
             await message.channel.send(t1.rv)
