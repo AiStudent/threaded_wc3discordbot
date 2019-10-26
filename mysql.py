@@ -218,4 +218,18 @@ pink.player_id=pinkpg.player_id and
 who.name='one_legion'
 order by upload_time ASC";
 
+
+select g.game_id, g.winner, apg.slot_nr as a_slot_nr, bpg.slot_nr as b_slot_nr
+from
+games g, player_game apg, player_game bpg, player  a, player b
+where
+a.name = 'wc3addict' and
+b.name = 'fook' and
+a.player_id = apg.player_id and
+b.player_id = bpg.player_id and
+apg.game_id = bpg.game_id and
+g.game_id = apg.game_id;
+    
+    
+
 """

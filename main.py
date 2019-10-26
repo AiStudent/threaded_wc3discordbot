@@ -22,11 +22,11 @@ import pymysql
 from transferer import transfer_db
 
 
-
 class Status:
     def __init__(self):
         self.progress = None
         self.request_queue = queue.Queue()
+
 
 class ThreadAnything(threading.Thread):
     def __init__(self, func, args, status=None, status_queue=None):
@@ -103,12 +103,14 @@ def get_replay_name(upload_time):
         if fnmatch.fnmatch(file, upload_time + '*.w3g'):
             return file
 
+
 def change_filename(upload_time, new_upload_time):
     filename = get_replay_name(upload_time)
     old_file = os.path.join("replays", filename)
     new_filename = new_upload_time + filename[len(upload_time):]
     new_file = os.path.join("replays", new_filename)
     os.rename(old_file, new_file)
+
 
 def save_file(data, filename):
     f = open('replays/'+filename+'.w3g', 'wb')
@@ -143,9 +145,9 @@ class DBEntry:
         if isinstance(de, DotaPlayer) or isinstance(de, str):
             self.player_id = None
             if isinstance(de, DotaPlayer):
-               self.name = de.name
+                self.name = de.name
             else:
-               self.name = de
+                self.name = de
             self.elo = 1000.0
             self.games = 0
             self.kdagames = 0
@@ -225,7 +227,8 @@ def sd_player(name: str):
         slash_delimited(round(p['avgkills'],1), round(p['avgdeaths'],1), round(p['avgassists'],1))
 
 
-def structure_game_msg(winner, mins, secs, team1_win_elo_inc, team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo):
+def structure_game_msg(winner, mins, secs, team1_win_elo_inc,
+                       team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo):
     msg = "```Winner: " + winner + ', ' + str(mins) + 'm, ' + str(secs) + 's, elo ratio (' +\
           str(round(team1_win_elo_inc, 1)) + '/' + str(round(team2_win_elo_inc, 1)) + ')\n'
 
@@ -297,7 +300,8 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     # structure statistics return message
     winner = ['sentinel', 'scourge'][winner-1]
 
-    msg = structure_game_msg(winner, mins, secs, team1_win_elo_inc, team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo)
+    msg = structure_game_msg(winner, mins, secs, team1_win_elo_inc,
+                             team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo)
 
     msg += "!confirm or !discard"
     status_queue.put(msg)
@@ -309,24 +313,25 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
         elif request is 'confirm':
             break
 
-    #status_queue.put("Uploading to db..")
+    # status_queue.put("Uploading to db..")
     status.progress = "Uploading to local db"
 
     date_and_time = unixtime_to_datetime(time.time())
-    #yyyymmdd_xxhxxmxxs_complete_winner_mins_secs_hash
+    # yyyymmdd_xxhxxmxxs_complete_winner_mins_secs_hash
     filename = date_and_time + '_complete_' + winner + '_' + str(mins) + '_' + str(secs) + '_' + md5
     save_file(replay, filename)
 
     try:
         game_entry = insert_game(
-            {   'mode': mode,
+            {
+                'mode': mode,
                 'winner': winner,
                 'duration': (60*mins+secs),
                 'upload_time': date_and_time,
                 'hash': md5,
                 'ranked': 1,
                 'withkda': 1,
-                'withcs' : 1,
+                'withcs': 1,
                 'team1_elo': team1_avg_elo,
                 'team2_elo': team2_avg_elo,
                 'team1_elo_change': t1_elo_change,
@@ -498,6 +503,7 @@ def recalculate_elo_from_game(upload_time, status=None):
         n += 1
 
     status.progress = 'Recalculating elo ' + slash_delimited(n, len(games))
+
 
 def reset_stats_of_latest_game(game_id):
     # get game
@@ -814,8 +820,8 @@ def show_game(game_id):
     secs = duration - 60*mins
     msg += str(mins) + 'm, ' + str(secs) + "s\n"
 
-    msg += "sentinel elo: " + str(round(game['team1_elo'],1)) + ", change: " \
-           + str(round(game['team1_elo_change'],1)) + '\n'
+    msg += "sentinel elo: " + str(round(game['team1_elo'], 1)) + ", change: " \
+           + str(round(game['team1_elo_change'], 1)) + '\n'
 
     sql = "select * from player_game where game_id=%s order by slot_nr ASC"
     player_games = fetchall(sql, (game_id))
@@ -837,7 +843,7 @@ def show_game(game_id):
     return msg
 
 
-def reupload_all_replays(status:Status, status_queue: queue.Queue):
+def reupload_all_replays(status: Status, status_queue: queue.Queue):
     cleard_db()
     status_queue.put("cleared db")
     n = 0
