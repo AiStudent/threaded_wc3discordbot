@@ -100,8 +100,9 @@ def check_if_replay_exists(md5):
 
 def get_replay_name(upload_time):
     for file in os.listdir('replays'):
-        if fnmatch.fnmatch(file, upload_time + '*.w3g'):
+        if file[:len(upload_time)] == upload_time:
             return file
+    raise Exception('File not found: ' + upload_time +'*.w3g')
 
 
 def change_filename(upload_time, new_upload_time):
@@ -205,7 +206,8 @@ def strwidth(name: str, width, *args):
     string = name.ljust(width)
     for n in range(0, len(args)-2, 2):
         string += (str(args[n])+', ').rjust(args[n+1])
-    string += str(args[-2])
+    if len(args) > 2:
+        string += str(args[-2])
     return string
 
 
@@ -790,9 +792,8 @@ def modify_game_upload_time(game_id, new_upload_time):
         return "Unrank the game before modifying upload time."
     old_upload_time = game['upload_time']
     game['upload_time'] = new_upload_time
-    update_game(game)
     change_filename(old_upload_time, new_upload_time)
-
+    update_game(game)
     return "Game ID: " + str(game_id) + " upload time set to " + new_upload_time
 
 
@@ -827,8 +828,10 @@ def show_game(game_id):
     player_games = fetchall(sql, (game_id))
     for pg in player_games[:5]:
         name = get_player_id(pg['player_id'])['name']
-        msg += strwidth(name, 15, pg['kills'], 4,
-                        pg['deaths'], 4, pg['assists'], 4) + '\n'
+        msg += strwidth(name, 15)
+        if game['withkda'] == 1:
+            msg += strwidth(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
+        msg += '\n'
 
     msg += "scourge elo: " + str(round(game['team2_elo'],1)) + ", change: " \
            + str(round(-game['team1_elo_change'],1)) + '\n'
@@ -1232,7 +1235,7 @@ class Client(discord.Client):
 
         author = message.author
         roles = [role.name for role in author.roles]
-        admin = ('Admin' in roles) or ('Development' in roles)
+        admin = ('DotA-Admin' in roles) or ('Development' in roles)
         messager = Message(message.channel)
         if command == '!sd':
             await self.sd_handler(message, payload)
@@ -1560,7 +1563,8 @@ class Client(discord.Client):
             await asyncio.sleep(0.1)
 
         if t1.exception:
-            message.channel.send("modify_game_upload_time exception")
+            await message.channel.send("modify_game_upload_time exception")
+            Client.lock = False
             raise t1.exception
         else:
             await message.channel.send(t1.rv)
