@@ -102,7 +102,7 @@ def get_replay_name(upload_time):
     for file in os.listdir('replays'):
         if file[:len(upload_time)] == upload_time:
             return file
-    raise Exception('File not found: ' + upload_time +'*.w3g')
+    raise Exception('File not found: ' + upload_time + '*.w3g')
 
 
 def change_filename(upload_time, new_upload_time):
@@ -216,7 +216,8 @@ def strwidthleft(name: str, width, *args):
     string = name.ljust(width)
     for n in range(0, len(args)-2, 2):
         string += (str(args[n])+' ').ljust(args[n+1])
-    string += str(args[-2])
+    if len(args) > 2:
+        string += str(args[-2])
     return string
 
 
@@ -226,7 +227,58 @@ def sd_player(name: str):
         return 'No stats on ' + name
     return name + ': ' + str(round(p['elo'], 1)) + ' elo, ' + \
         'W/L ' + slash_delimited(p['wins'], p['loss']) + ', avg KDA ' + \
-        slash_delimited(round(p['avgkills'],1), round(p['avgdeaths'],1), round(p['avgassists'],1))
+        slash_delimited(round(p['avgkills'], 1), round(p['avgdeaths'], 1), round(p['avgassists'], 1))
+
+
+def sd_players(name: str, name2: str):
+    sql = '''select
+        g.game_id, g.winner, apg.slot_nr as a_slot_nr, bpg.slot_nr as b_slot_nr
+        from
+        games g, player_game apg, player_game bpg, player a, player b
+        where
+        a.name = %s and
+        b.name = %s and
+        a.player_id = apg.player_id and
+        b.player_id = bpg.player_id and
+        apg.game_id = bpg.game_id and
+        g.game_id = apg.game_id'''
+    rows = fetchall(sql, (name, name2))
+    print(rows)
+
+    same_team_wins = 0
+    same_team_loss = 0
+    a_wins_over_b = 0
+    b_wins_over_a = 0
+
+    for row in rows:
+        winner = row['winner']
+        a_slot_nr = row['a_slot_nr']
+        b_slot_nr = row['b_slot_nr']
+        if winner == 'sentinel':
+            if a_slot_nr < 5:
+                if b_slot_nr < 5:
+                    same_team_wins += 1
+                else:
+                    a_wins_over_b += 1
+            else:
+                if b_slot_nr < 5:
+                    b_wins_over_a += 1
+                else:
+                    same_team_loss += 1
+        else:
+            if a_slot_nr < 5:
+                if b_slot_nr < 5:
+                    same_team_loss += 1
+                else:
+                    b_wins_over_a += 1
+            else:
+                if b_slot_nr < 5:
+                    a_wins_over_b += 1
+                else:
+                    same_team_wins += 1
+
+    return '```' + (name + ' vs ' + name2 + ':').ljust(25) + str(a_wins_over_b) + '/' + str(b_wins_over_a) + '\n' \
+        + 'same team:'.ljust(25) + str(same_team_wins) + '/' + str(same_team_loss) + '```'
 
 
 def structure_game_msg(winner, mins, secs, team1_win_elo_inc,
@@ -412,7 +464,7 @@ def unrank_game(game_id, status):
 def rollback_to(game, status=None):
     upload_time = game['upload_time']
     sql = "select * from games where upload_time>=%s AND ranked=1 ORDER BY upload_time DESC;"
-    games = fetchall(sql, (upload_time))
+    games = fetchall(sql, upload_time)
     n = 0
     for g in games:
         if status:
@@ -423,7 +475,7 @@ def rollback_to(game, status=None):
 
 def recalculate_elo_from_game(upload_time, status=None):
     sql = "select * from games where upload_time>=%s AND ranked=1 ORDER BY upload_time ASC;"
-    games = fetchall(sql, (upload_time))
+    games = fetchall(sql, upload_time)
 
     n = 0
     for game in games:
@@ -497,7 +549,6 @@ def recalculate_elo_from_game(upload_time, status=None):
             for p in team2:
                 p['elo'] += team2_win_elo
 
-
         update_game(game)
         for p in team1+team2:
             update_player(p)
@@ -531,7 +582,6 @@ def reset_stats_of_latest_game(game_id):
             else:
                 p['loss'] -= 1
 
-        
         p['games'] -= 1
         p['elo'] = pg['elo_before']
         if game['withkda'] == 1:
@@ -593,9 +643,9 @@ def put_entries_in_db(game_id, new_db_entries, old_db_entries):
             'csdenies': db_entry.dota_player.csdenies
         })
 
-        # for old_db_entries
-        for db_entry in old_db_entries:
-            update_player(db_entry.get_hm(), 'player_id')
+    # for old_db_entries
+    for db_entry in old_db_entries:
+        update_player(db_entry.get_hm(), 'player_id')
 
 
 def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
@@ -619,9 +669,10 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
     team1_win_elo_inc, team2_win_elo_inc = team_win_elos(team1, team2)
     team1_avg_elo, team2_avg_elo = avg_team_elo(team1), avg_team_elo(team2)
 
-    msg = structure_game_msg('?', '?', '?', team1_win_elo_inc, team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo)
+    msg = structure_game_msg('?', '?', '?', team1_win_elo_inc,
+                             team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo)
 
-    #send preliminary message
+    # send preliminary message
     msg += "!discard or !manual winner mins secs"
     status_queue.put(msg)
 
@@ -654,7 +705,8 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
     # structure statistics return message
     winner = ['sentinel', 'scourge'][winner - 1]
 
-    msg = structure_game_msg(winner, mins, secs, team1_win_elo_inc, team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo)
+    msg = structure_game_msg(winner, mins, secs, team1_win_elo_inc,
+                             team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo)
 
     msg += "!confirm or !discard"
     status_queue.put(msg)
@@ -681,8 +733,8 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
              'upload_time': date_and_time,
              'hash': md5,
              'ranked': 1,
-             'withkda' : 1,
-             'withcs' : 1,
+             'withkda': 1,
+             'withcs': 1,
              'team1_elo': team1_avg_elo,
              'team2_elo': team2_avg_elo,
              'team1_elo_change': t1_elo_change,
@@ -728,6 +780,7 @@ def get_teams_and_dbentries(dota_players):
 
         db_entries += [db_entry]
     return team1, team2, db_entries, new_db_entries, old_db_entries
+
 
 def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=None):
     # parse
@@ -808,7 +861,6 @@ def rank_players(status):
         update_player(player)
 
 
-
 def show_game(game_id):
     game = get_game(game_id)
     if game is None:
@@ -825,7 +877,7 @@ def show_game(game_id):
            + str(round(game['team1_elo_change'], 1)) + '\n'
 
     sql = "select * from player_game where game_id=%s order by slot_nr ASC"
-    player_games = fetchall(sql, (game_id))
+    player_games = fetchall(sql, game_id)
     for pg in player_games[:5]:
         name = get_player_id(pg['player_id'])['name']
         msg += strwidth(name, 15)
@@ -833,8 +885,8 @@ def show_game(game_id):
             msg += strwidth(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
         msg += '\n'
 
-    msg += "scourge elo: " + str(round(game['team2_elo'],1)) + ", change: " \
-           + str(round(-game['team1_elo_change'],1)) + '\n'
+    msg += "scourge elo: " + str(round(game['team2_elo'], 1)) + ", change: " \
+           + str(round(-game['team1_elo_change'], 1)) + '\n'
 
     for pg in player_games[5:]:
         name = get_player_id(pg['player_id'])['name']
@@ -855,7 +907,7 @@ def reupload_all_replays(status: Status, status_queue: queue.Queue):
         status.progress = 'Uploading ' + slash_delimited(n+1, len(files))
         
         parts = file[:-4].split('_')
-        date_and_time = parts[0] + '_' + parts[1] #date, time
+        date_and_time = parts[0] + '_' + parts[1]  # date, time
         if parts[3] == 'sentinel':
             winner = 1
         elif parts[3] == 'scourge':
@@ -875,8 +927,8 @@ def reupload_all_replays(status: Status, status_queue: queue.Queue):
             lines = f.readlines()
             f.close()          
             winner = ['sentinel', 'scourge'][winner-1]
-            auto_upload_typed(lines, date_and_time, winner, mins, secs)
-        n+=1
+            auto_upload_typed(lines, winner, mins, secs)
+        n += 1
 
     rank_players(status)
     if keys.REMOTE_DB:
@@ -897,14 +949,14 @@ def delete_replay(game_id):
             filepath = os.path.join("replays", file)
             os.remove(filepath)
 
-            #remove game
+            # remove game
             sql = "delete from games where game_id=%s"
-            commit(sql, (game_id))
-            #remove pgs
+            commit(sql, game_id)
+            # remove pgs
             sql = "delete from player_game where game_id=%s"
-            commit(sql, (game_id))
-            #if the players only have 0 games, remove them aswell?
-            #can cause trouble if someone unranks 1 of 2 games, and then deletes the last, and then reranks
+            commit(sql, game_id)
+            # if the players only have 0 games, remove them aswell?
+            # can cause trouble if someone unranks 1 of 2 games, and then deletes the last, and then reranks
             return "Game " + str(game_id) + " is no more."
 
     return "Replay file on disk not found."
@@ -914,8 +966,9 @@ def unixtime_to_datetime(ut):
     return datetime.utcfromtimestamp(ut).strftime('%Y%m%d_%Hh%Mm%Ss')
 
 
-def auto_upload_typed(lines, date_and_time, winner, mins, secs):
+def auto_upload_typed(lines, winner, mins, secs):
     withkda = withcs = False
+    k, d, a = None, None, None
     longline = ""
     for line in lines:
         longline += line + " "
@@ -924,10 +977,10 @@ def auto_upload_typed(lines, date_and_time, winner, mins, secs):
         player_names = [words[n] for n in range(0, 10, 1)]
     elif len(words) == 40:
         withkda = True
-        player_names = [words[n] for n in range(0,40,4)]
-        k = [int(words[n]) for n in range(1,40,4)]
-        d = [int(words[n]) for n in range(2,40,4)]
-        a = [int(words[n]) for n in range(3,40,4)]
+        player_names = [words[n] for n in range(0, 40, 4)]
+        k = [int(words[n]) for n in range(1, 40, 4)]
+        d = [int(words[n]) for n in range(2, 40, 4)]
+        a = [int(words[n]) for n in range(3, 40, 4)]
     else:
         raise Exception('auto_upload_typed wrong nr of arguments')
 
@@ -957,10 +1010,8 @@ def auto_upload_typed(lines, date_and_time, winner, mins, secs):
         db_entries += [db_entry]
     
     # determine elo change
-    team1_win_elo_inc, team2_win_elo_inc = team_win_elos(team1, team2)
     team1_avg_elo, team2_avg_elo = avg_team_elo(team1), avg_team_elo(team2)
     t1_elo_change, t2_elo_change = teams_update_elo(team1, team2, winner)
-
 
     # save in database
     upload_time = unixtime_to_datetime(time.time())
@@ -1006,7 +1057,6 @@ def auto_upload_typed(lines, date_and_time, winner, mins, secs):
             db_entry.avgkills = db_entry.kills / db_entry.kdagames
             db_entry.avgdeaths = db_entry.deaths / db_entry.kdagames
             db_entry.avgassists = db_entry.assists / db_entry.kdagames
- 
 
     # insert new players
     for db_entry in new_db_entries:
@@ -1036,16 +1086,18 @@ def auto_upload_typed(lines, date_and_time, winner, mins, secs):
                 'elo_before': db_entry.old_elo
             })
 
+
 def upload_typed_replay(payload: list, status: Status, status_queue: queue.Queue):
     withkda = withcs = False
+    k, d, a = None, None, None
     if len(payload) == 13:
         player_names = [payload[n] for n in range(3, 13, 1)]
     elif len(payload) == 43:
         withkda = True
-        player_names = [payload[n] for n in range(3,43,4)]
-        k = [int(payload[n]) for n in range(4,43,4)]
-        d = [int(payload[n]) for n in range(5,43,4)]
-        a = [int(payload[n]) for n in range(6,43,4)]
+        player_names = [payload[n] for n in range(3, 43, 4)]
+        k = [int(payload[n]) for n in range(4, 43, 4)]
+        d = [int(payload[n]) for n in range(5, 43, 4)]
+        a = [int(payload[n]) for n in range(6, 43, 4)]
     else:
         return 'Need 13 arguments: winner mins secs player1 ... player10'
     if len(set(player_names)) != 10:
@@ -1053,7 +1105,6 @@ def upload_typed_replay(payload: list, status: Status, status_queue: queue.Queue
     winner = payload[0]
     mins = int(payload[1])
     secs = int(payload[2])
-
 
     # get players, winner, mins, secs
     # optional kda
@@ -1090,24 +1141,23 @@ def upload_typed_replay(payload: list, status: Status, status_queue: queue.Queue
 
     # confirm - note new players with (new?) to prevent spelling errors
     msg = '```'
-    msg += 'Winner: ' + winner + ', ' + str(mins) +'m ' + str(secs) + 's elo: ('\
-           + str(round(team1_win_elo_inc,1)) + '/' + str(round(team2_win_elo_inc,1)) +')\n'
+    msg += 'Winner: ' + winner + ', ' + str(mins) + 'm ' + str(secs) + 's elo: ('\
+           + str(round(team1_win_elo_inc, 1)) + '/' + str(round(team2_win_elo_inc, 1)) + ')\n'
     msg += 'sentinel elo: ' + str(team1_avg_elo) + '\n'
     for n in range(10):
-       player_name = player_names[n]
-       msg += player_name
-       if player_name in [db_entry.name for db_entry in new_db_entries]:
-           msg += '(new?)'
-       if withkda:
-         msg += ' ' + str(k[n]) + ',' + str(d[n]) + ',' + str(a[n])
-       if n == 4:
-         msg += '\n--------\n'
-         msg += 'scourge elo: ' + str(team2_avg_elo)
-       msg += '\n'
+        player_name = player_names[n]
+        msg += player_name
+        if player_name in [db_entry.name for db_entry in new_db_entries]:
+            msg += '(new?)'
+        if withkda:
+            msg += ' ' + str(k[n]) + ',' + str(d[n]) + ',' + str(a[n])
+        if n == 4:
+            msg += '\n--------\n'
+            msg += 'scourge elo: ' + str(team2_avg_elo)
+        msg += '\n'
     msg += '```'
 
-
-    #confirm
+    # confirm
     msg += "!confirm or !discard"
     status_queue.put(msg)
 
@@ -1162,7 +1212,6 @@ def upload_typed_replay(payload: list, status: Status, status_queue: queue.Queue
             db_entry.avgkills = db_entry.kills / db_entry.kdagames
             db_entry.avgdeaths = db_entry.deaths / db_entry.kdagames
             db_entry.avgassists = db_entry.assists / db_entry.kdagames
- 
 
     # insert new players
     for db_entry in new_db_entries:
@@ -1192,14 +1241,14 @@ def upload_typed_replay(payload: list, status: Status, status_queue: queue.Queue
                 'elo_before': db_entry.old_elo
             })
         
-    #save in a file
+    # save in a file
     filename = upload_time + '_custom_' + winner + '_' + str(mins) + '_' + str(secs) + '.txt'
     f = open('replays/' + filename, 'w')
     for n in range(10):
-      print(player_names[n], end="", file=f)
-      if len(payload) == 43:
-         print('',k[n],d[n],a[n], end='', file=f)
-      print(file=f)
+        print(player_names[n], end="", file=f)
+        if len(payload) == 43:
+            print('', k[n], d[n], a[n], end='', file=f)
+        print(file=f)
     f.close()
 
     rank_players(status)
@@ -1215,9 +1264,6 @@ class Client(discord.Client):
 
     async def on_ready(self):
         print('Logged on as', self.user)
-
-    async def on_resumed(self):
-        print("resumed..")
 
     async def on_message(self, message: discord.message.Message):
         # don't respond to ourselves
@@ -1323,8 +1369,6 @@ class Client(discord.Client):
             await response.send(str(t1.rv))
         else:
             await response.send('No game found')
-
-
 
     @staticmethod
     async def replay_handler(message: discord.message.Message, data):
@@ -1458,14 +1502,20 @@ class Client(discord.Client):
                 return
             _, _, status = Client.current_replay_upload
             status.request_queue.put(('manual', payload[0], payload[1], payload[2]))
+
     @staticmethod
     async def sd_handler(message: discord.message.Message, payload=None):
         if payload is None:
             name = str(message.author.display_name)
+            t1 = ThreadAnything(sd_player, (name,))
+        elif len(payload) == 2:
+            name = payload[0]
+            name2 = payload[1]
+            t1 = ThreadAnything(sd_players, (name, name2))
         else:
             name = payload[0]
+            t1 = ThreadAnything(sd_player, (name,))
 
-        t1 = ThreadAnything(sd_player, (name,))
         t1.start()
 
         response = Message(message.channel)
@@ -1478,7 +1528,6 @@ class Client(discord.Client):
 
         if t1.rv:
             await response.send(str(t1.rv))
-
 
     @staticmethod
     async def list_last_games_handler(message: discord.message.Message, payload=None):
@@ -1495,7 +1544,6 @@ class Client(discord.Client):
             await asyncio.sleep(0.1)
 
         await response.send(t1.rv)
-
 
     @staticmethod
     async def rank_handler(message: discord.message.Message, payload):
@@ -1521,7 +1569,6 @@ class Client(discord.Client):
 
         Client.lock = False
         await response.send(t1.rv)
-
 
     @staticmethod
     async def unrank_handler(message: discord.message.Message, payload):
