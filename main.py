@@ -243,7 +243,6 @@ def sd_players(name: str, name2: str):
         apg.game_id = bpg.game_id and
         g.game_id = apg.game_id'''
     rows = fetchall(sql, (name, name2))
-    print(rows)
 
     same_team_wins = 0
     same_team_loss = 0
