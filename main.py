@@ -1301,7 +1301,7 @@ def capt_rank(name):
     msg = ""
     for player in list_players:
         name, wins, loss = player
-        msg += name.ljust(15) + str(wins) + ', ' + str(loss) + "\n"
+        msg += name.ljust(18) + str(wins) + ', ' + str(loss) + "\n"
 
     # return all
     return msg
