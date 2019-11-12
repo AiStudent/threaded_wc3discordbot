@@ -20,7 +20,7 @@ import fnmatch
 import os
 import pymysql
 from transferer import transfer_db
-
+import io
 
 class Status:
     def __init__(self):
@@ -1256,6 +1256,56 @@ def upload_typed_replay(payload: list, status: Status, status_queue: queue.Queue
     return "Replay uploaded to db. Game ID: " + str(game_id)
     
 
+def capt_rank(name):
+    sql = """
+        select g.game_id, g.winner, blue.name as blue, pink.name as pink 
+        from
+        games g, player_game bluepg, player_game pinkpg, player blue, player pink
+        where 
+        g.game_id=bluepg.game_id and
+        g.game_id=pinkpg.game_id and
+        bluepg.slot_nr=0 and
+        pinkpg.slot_nr=5 and
+        blue.player_id=bluepg.player_id and
+        pink.player_id=pinkpg.player_id;
+        """
+
+    rows = fetchall(sql, ())
+
+    #add up ranks
+    players = {}
+    for row in rows:
+        blue = row['blue']
+        pink = row['pink']
+        winner = row['winner']
+        
+        if blue not in players:
+            players[blue] = [0, 0]
+        if pink not in players:
+            players[pink] = [0, 0]
+    
+        if winner == 'sentinel':
+            players[blue][0] += 1
+            players[pink][1] += 1
+        elif winner == 'scourge':
+            players[blue][1] += 1
+            players[pink][0] += 1
+
+
+    list_players = []
+    for name in players:
+        list_players += [(name, players[name][0], players[name][1])]
+
+    list_players.sort(key=lambda x: x[1], reverse=True)
+
+    msg = ""
+    for player in list_players:
+        name, wins, loss = player
+        msg += name.ljust(15) + str(wins) + ', ' + str(loss) + "\n"
+
+    # return all
+    return msg
+
 class Client(discord.Client):
     player_queue = []
     current_replay_upload = []
@@ -1284,6 +1334,8 @@ class Client(discord.Client):
         messager = Message(message.channel)
         if command == '!sd':
             await self.sd_handler(message, payload)
+        elif command == '!capt_rank':
+            await self.capt_rank_handler(message, payload)
         elif command == '!confirm':
             await self.confirm_replay_handler(message)
         elif command == '!discard':
@@ -1368,6 +1420,32 @@ class Client(discord.Client):
             await response.send(str(t1.rv))
         else:
             await response.send('No game found')
+
+    @staticmethod
+    async def capt_rank_handler(message: discord.message.Message, payload):
+        if payload:
+            name = payload[0]
+        else:
+            name = None
+
+        t1 = ThreadAnything(capt_rank, (name,))
+        t1.start()
+
+        response = Message(message.channel)
+
+        while t1.is_alive():
+            await asyncio.sleep(0.1)
+
+        if t1.exception:
+            raise t1.exception
+
+        if t1.rv:
+            fio = io.StringIO(t1.rv)
+            f1 = discord.File(fio, "captain_stats.txt")
+            #await response.send("hi", files=[f1])
+            await message.channel.send(files=[f1])
+        else:
+            await response.send('No return from capt_rank')
 
     @staticmethod
     async def replay_handler(message: discord.message.Message, data):
