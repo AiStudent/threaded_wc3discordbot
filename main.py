@@ -2,12 +2,12 @@ import threading
 import time
 import discord
 import asyncio
-from datetime import datetime
+from basic_functions import unixtime_to_datetime, strwidthleft, strwidthright, get_hash, slash_delimited,\
+    check_if_file_with_hash_exists
 from mysql import get_player, insert_player, insert_game, update_player, insert_player_game, get_game
 from mysql import fetchall, commit, update_game, get_player_id, update_player_game
 import keys
 import requests
-import hashlib
 import queue
 from w3gtest.decompress import decompress_replay
 from w3gtest.decompress import CouldNotDecompress
@@ -76,26 +76,10 @@ class Message:
             self.cooldown = time.time() + 1
 
 
-# hashing
-BLOCKSIZE = 65536
 
 
-def get_hash(data):
-    hasher = hashlib.md5()
-    index = 0
-    buf = data[index:index+BLOCKSIZE]
-    while len(buf) > 0:
-        index += BLOCKSIZE
-        hasher.update(buf)
-        buf = data[index:index+BLOCKSIZE]
-    return hasher.hexdigest()
 
 
-def check_if_replay_exists(md5):
-    for file in os.listdir('replays'):
-        if fnmatch.fnmatch(file, '*' + md5 + '*.w3g'):
-            return True
-    return False
 
 
 def get_replay_name(upload_time):
@@ -193,32 +177,7 @@ class DBEntry:
         return hm
 
 
-def slash_delimited(*args):
-    string = '('
-    for n in range(len(args)-1):
-        string += str(args[n]) + '/'
-    string += str(args[-1]) + ')'
-    return string
 
-
-def strwidth(name: str, width, *args):
-    name = str(name)
-    string = name.ljust(width)
-    for n in range(0, len(args)-2, 2):
-        string += (str(args[n])+', ').rjust(args[n+1])
-    if len(args) > 2:
-        string += str(args[-2])
-    return string
-
-
-def strwidthleft(name: str, width, *args):
-    name = str(name)
-    string = name.ljust(width)
-    for n in range(0, len(args)-2, 2):
-        string += (str(args[n])+' ').ljust(args[n+1])
-    if len(args) > 2:
-        string += str(args[-2])
-    return string
 
 
 def sd_player(name: str):
@@ -290,11 +249,11 @@ def structure_game_msg(winner, mins, secs, team1_win_elo_inc,
 
     msg += 'sentinel avg elo: ' + str(round(team1_avg_elo, 1)) + '\n'
     for dota_player in team1_dp:
-        msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
+        msg += strwidthright(dota_player.name, 15, dota_player.kills, 4,
                         dota_player.deaths, 4, dota_player.assists, 4) + '\n'
     msg += 'scourge avg elo: ' + str(round(team2_avg_elo, 1)) + '\n'
     for dota_player in team2_dp:
-        msg += strwidth(dota_player.name, 15, dota_player.kills, 4,
+        msg += strwidthright(dota_player.name, 15, dota_player.kills, 4,
                         dota_player.deaths, 4, dota_player.assists, 4) + '\n'
     msg += "```"
     return msg
@@ -332,7 +291,7 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     # check if already uploaded
     stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
     md5 = get_hash(stats_bytes)
-    if check_if_replay_exists(md5):
+    if check_if_file_with_hash_exists(md5):
         game = get_game(md5, 'hash')
         return "Replay already uploaded with Game ID: " + str(game['game_id'])
 
@@ -403,19 +362,6 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     if keys.REMOTE_DB:
         transfer_db(status)
     return "Replay uploaded to db. Game ID: " + str(game_id)
-
-
-def list_last_games(nr):
-    sql = "select game_id, mode, ranked, upload_time from games order by upload_time ASC limit %s"
-    rows = fetchall(sql, (nr,))
-
-    msg = "```"
-    msg += strwidthleft('game_id', 10, 'ranked', 10, 'upload_time', 20) + '\n'
-
-    for row in rows:
-        msg += strwidthleft(row['game_id'], 10, row['ranked'], 10, row['upload_time'], 20) + '\n'
-    msg += '```'
-    return msg
 
 
 def rank_game(game_id, status):
@@ -655,7 +601,7 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
     # check if already uploaded
     stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
     md5 = get_hash(stats_bytes)
-    if check_if_replay_exists(md5):
+    if check_if_file_with_hash_exists(md5):
         game = get_game(md5, 'hash')
         return "Replay already uploaded with Game ID: " + str(game['game_id'])
 
@@ -879,9 +825,9 @@ def show_game(game_id):
     player_games = fetchall(sql, game_id)
     for pg in player_games[:5]:
         name = get_player_id(pg['player_id'])['name']
-        msg += strwidth(name, 15)
+        msg += strwidthright(name, 15)
         if game['withkda'] == 1:
-            msg += strwidth(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
+            msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
         msg += '\n'
 
     msg += "scourge elo: " + str(round(game['team2_elo'], 1)) + ", change: " \
@@ -889,9 +835,9 @@ def show_game(game_id):
 
     for pg in player_games[5:]:
         name = get_player_id(pg['player_id'])['name']
-        msg += strwidth(name, 15)
+        msg += strwidthright(name, 15)
         if game['withkda'] == 1:
-            msg += strwidth(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
+            msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
         msg += '\n'
     msg += "```"
     return msg
@@ -959,10 +905,6 @@ def delete_replay(game_id):
             return "Game " + str(game_id) + " is no more."
 
     return "Replay file on disk not found."
-
-
-def unixtime_to_datetime(ut):
-    return datetime.utcfromtimestamp(ut).strftime('%Y%m%d_%Hh%Mm%Ss')
 
 
 def auto_upload_typed(lines, winner, mins, secs):
@@ -1344,8 +1286,6 @@ class Client(discord.Client):
             await self.force_discard_replay_handler(message)
         elif command == '!manual' and payload:
             await self.manual_replay_handler(message, payload)
-        elif command == '!list':
-            await self.list_last_games_handler(message, payload)
         elif command == '!cleardb' and admin:
             await self.clear_db_handler(message)
         elif command == '!rank' and payload and admin:
@@ -1605,22 +1545,6 @@ class Client(discord.Client):
 
         if t1.rv:
             await response.send(str(t1.rv))
-
-    @staticmethod
-    async def list_last_games_handler(message: discord.message.Message, payload=None):
-        response = Message(message.channel)
-        if payload:
-            nr = int(payload[0])
-        else:
-            nr = 10
-
-        t1 = ThreadAnything(list_last_games, (nr,))
-        t1.start()
-
-        while t1.is_alive():
-            await asyncio.sleep(0.1)
-
-        await response.send(t1.rv)
 
     @staticmethod
     async def rank_handler(message: discord.message.Message, payload):
