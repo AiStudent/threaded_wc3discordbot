@@ -1427,8 +1427,7 @@ class Client(discord.Client):
                     '!delete game_id (deletes an unranked game)',
                     '!force_discard',
                     '!force_unlock',
-                    '!new_season',
-                    '!clear_db']
+                    '!new_season']
         msg = '```'
         for command in commands:
             msg += command + '\n'
