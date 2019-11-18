@@ -1,9 +1,8 @@
-import threading
+from thread_anything import *
 import time
 import discord
 import asyncio
-from basic_functions import unixtime_to_datetime, strwidthleft, strwidthright, get_hash, slash_delimited,\
-    check_if_file_with_hash_exists
+from basic_functions import *
 from mysql import get_player, insert_player, insert_game, update_player, insert_player_game, get_game
 from mysql import fetchall, commit, update_game, get_player_id, update_player_game
 import keys
@@ -22,33 +21,7 @@ import pymysql
 from transferer import transfer_db
 import io
 
-class Status:
-    def __init__(self):
-        self.progress = None
-        self.request_queue = queue.Queue()
 
-
-class ThreadAnything(threading.Thread):
-    def __init__(self, func, args, status=None, status_queue=None):
-        super(ThreadAnything, self).__init__()
-
-        self.func = func
-        self.args = args
-        self.rv = None
-        self.status = status
-        self.status_queue = status_queue
-        self.exception = None
-
-    def run(self):
-        try:
-            args = self.args
-            if self.status:
-                args += (self.status,)
-            if self.status_queue:
-                args += (self.status_queue,)
-            self.rv = self.func(*args)
-        except Exception as exc:
-            self.exception = exc
 
 
 class Message:
@@ -76,31 +49,12 @@ class Message:
             self.cooldown = time.time() + 1
 
 
-
-
-
-
-
-
-def get_replay_name(upload_time):
-    for file in os.listdir('replays'):
-        if file[:len(upload_time)] == upload_time:
-            return file
-    raise Exception('File not found: ' + upload_time + '*.w3g')
-
-
-def change_filename(upload_time, new_upload_time):
-    filename = get_replay_name(upload_time)
+def change_replayfile_upload_time(upload_time, new_upload_time):
+    filename = search_replay_on_disk(upload_time)
     old_file = os.path.join("replays", filename)
     new_filename = new_upload_time + filename[len(upload_time):]
     new_file = os.path.join("replays", new_filename)
     os.rename(old_file, new_file)
-
-
-def save_file(data, filename):
-    f = open('replays/'+filename+'.w3g', 'wb')
-    f.write(data)
-    f.close()
 
 
 class DBEntry:
@@ -790,7 +744,7 @@ def modify_game_upload_time(game_id, new_upload_time):
         return "Unrank the game before modifying upload time."
     old_upload_time = game['upload_time']
     game['upload_time'] = new_upload_time
-    change_filename(old_upload_time, new_upload_time)
+    change_replayfile_upload_time(old_upload_time, new_upload_time)
     update_game(game)
     return "Game ID: " + str(game_id) + " upload time set to " + new_upload_time
 
@@ -1198,7 +1152,7 @@ def upload_typed_replay(payload: list, status: Status, status_queue: queue.Queue
     return "Replay uploaded to db. Game ID: " + str(game_id)
     
 
-def capt_rank(name):
+def capt_rank():
     sql = """
         select g.game_id, g.winner, blue.name as blue, pink.name as pink 
         from
@@ -1241,12 +1195,81 @@ def capt_rank(name):
     list_players.sort(key=lambda x: x[1], reverse=True)
 
     msg = ""
+    rank = 1
     for player in list_players:
         name, wins, loss = player
-        msg += name.ljust(18) + str(wins) + ', ' + str(loss) + "\n"
+        msg += strwidthleft(rank, 4, name, 18, wins, 4, loss, 4) + "\n"
+        rank += 1
 
     # return all
     return msg
+
+
+def get_all_stats():
+    # normal ranking
+    sql = "select * from player order by rank"
+    rows = fetchall(sql, ())
+
+    player_stats = ""
+    for player in rows:
+        player_stats += strwidthleft(
+            player['rank'], 4,
+            player['name'], 18,
+            round(player['elo'],1), 8,
+            player['wins'], 4,
+            player['loss'], 4,
+            round(player['avgkills'],1), 7,
+            round(player['avgdeaths'],1), 7,
+            round(player['avgassists'],1), 7
+        ) + '\n'
+
+    # captain ranking
+    captain_stats = capt_rank()
+
+    return player_stats, captain_stats
+
+
+def new_season(status: Status, status_queue: queue.Queue):
+    # confirmation - season nr
+
+    msg = "!confirm or !discard on archiving the current season."
+    status_queue.put(msg)
+
+    while True:
+        request = status.request_queue.get()
+        if request is 'discard':
+            return "Did not archive the season."
+        elif request is 'confirm':
+            break
+
+    # get stats
+    player_stats, captain_stats = get_all_stats()
+
+    # stash replays -> season1/...
+    past_seasons = os.listdir('./past_seasons/')
+    current_season = len(past_seasons) + 1
+
+    new_season_path = 'past_seasons/season'+str(current_season)
+    os.mkdir(new_season_path)
+    os.rename('replays', new_season_path + '/replays')
+    os.mkdir('replays')
+
+    # save stats
+    f = open(new_season_path + '/player_stats.txt', 'w')
+    print(player_stats, file=f, end='')
+    f.close()
+
+    f = open(new_season_path + '/captain_stats.txt', 'w')
+    print(captain_stats, file=f, end='')
+    f.close()
+
+    # cleardb
+    cleard_db()
+    if keys.REMOTE_DB:
+        transfer_db(status)
+
+    return "Season " + str(current_season) + ' has been archived.'
+
 
 class Client(discord.Client):
     player_queue = []
@@ -1276,17 +1299,23 @@ class Client(discord.Client):
         messager = Message(message.channel)
         if command == '!sd':
             await self.sd_handler(message, payload)
-        elif command == '!capt_rank':
-            await self.capt_rank_handler(message, payload)
+        elif command == '!get_captain_rank':
+            await self.capt_rank_handler(message)
+        elif command == '!get_all_stats':
+            await self.get_all_stats_handler(message)
         elif command == '!confirm':
             await self.confirm_replay_handler(message)
         elif command == '!discard':
             await self.discard_replay_handler(message)
         elif command == '!force_discard' and admin:
             await self.force_discard_replay_handler(message)
+        elif command == '!force_unlock' and admin:
+            await self.force_unlock_handler(message)
+        elif command == '!new_season' and admin:
+            await self.new_season_handler(message)
         elif command == '!manual' and payload:
             await self.manual_replay_handler(message, payload)
-        elif command == '!cleardb' and admin:
+        elif command == '!clear_db' and admin:
             await self.clear_db_handler(message)
         elif command == '!rank' and payload and admin:
             await self.rank_handler(message, payload)
@@ -1316,15 +1345,90 @@ class Client(discord.Client):
                 await messager.send('Not a wc3 replay.')
 
     @staticmethod
+    async def force_unlock_handler(message):
+        if Client.lock:
+            Client.lock = False
+            if Client.current_replay_upload:
+                _, t1, status = Client.current_replay_upload
+                status.request_queue.put('discard')
+                await message.channel.send("One thread handed !discard")
+            await message.channel.send("Db unlocked.")
+        else:
+            await message.channel.send("Db already unlocked.")
+
+
+    @staticmethod
+    async def new_season_handler(message):
+        if Client.lock:
+            await message.channel.send("Db is currently locked.")
+            return
+        Client.lock = True
+
+        status_queue = queue.Queue()
+        status = Status()
+        t1 = ThreadAnything(new_season, (), status=status, status_queue=status_queue)
+        Client.current_replay_upload = (message.author, t1, status)
+        t1.start()
+
+        while t1.is_alive():
+            while not status_queue.empty():
+                await message.channel.send(status_queue.get_nowait())
+            await asyncio.sleep(0.1)
+
+        while not status_queue.empty():  # can maybe make prettier
+            await message.channel.send(status_queue.get_nowait())
+
+        Client.lock = False
+        Client.current_replay_upload = None
+        if t1.exception:
+            await message.channel.send("Exception in new_season function.")
+            raise t1.exception
+
+        if t1.rv:
+            await message.channel.send(str(t1.rv))
+        else:
+            await message.channel.send("Error: this shouldn't happen.")
+
+
+    @staticmethod
+    async def get_all_stats_handler(message):
+
+        t1 = ThreadAnything(get_all_stats, ())
+        t1.start()
+
+        response = Message(message.channel)
+
+        while t1.is_alive():
+            await asyncio.sleep(0.1)
+
+        if t1.exception:
+            raise t1.exception
+
+        if t1.rv:
+            fio = io.StringIO(t1.rv[0])     # player stats
+            fio2 = io.StringIO(t1.rv[1])    # captain stats
+            f1 = discord.File(fio, "player_stats.txt")
+            f2 = discord.File(fio2, "captain_stats.txt")
+            await message.channel.send(files=[f1,f2])
+        else:
+            await response.send('No return from capt_rank.')
+
+    @staticmethod
     async def help_handler(message):
         commands = ['!sd name',
-                    '!list nr_of_last_games',
+                    '!sd name1 name2',
+                    '!get_captain_rank',
+                    '!get_all_stats',
                     'admin commands:',
                     '!unrank game_id',
                     '!rank game_id',
                     '!setdate game_id yyyymmdd_xxhxxmxxs',
                     '!reupload_all_replays (in order of upload time)',
-                    '!delete game_id (deletes an unranked game)']
+                    '!delete game_id (deletes an unranked game)',
+                    '!force_discard',
+                    '!force_unlock',
+                    '!new_season',
+                    '!clear_db']
         msg = '```'
         for command in commands:
             msg += command + '\n'
@@ -1334,12 +1438,12 @@ class Client(discord.Client):
     @staticmethod
     async def clear_db_handler(message):
         if Client.lock:
-            await message.channel.send("db is currently locked")
+            await message.channel.send("Db is currently locked.")
             return
         Client.lock = True
         cleard_db()
         Client.lock = False
-        await message.channel.send("cleared db")
+        await message.channel.send("Cleared db.")
 
     @staticmethod
     async def show_game_handler(message: discord.message.Message, payload):
@@ -1362,13 +1466,9 @@ class Client(discord.Client):
             await response.send('No game found')
 
     @staticmethod
-    async def capt_rank_handler(message: discord.message.Message, payload):
-        if payload:
-            name = payload[0]
-        else:
-            name = None
+    async def capt_rank_handler(message: discord.message.Message):
 
-        t1 = ThreadAnything(capt_rank, (name,))
+        t1 = ThreadAnything(capt_rank, ())
         t1.start()
 
         response = Message(message.channel)
@@ -1508,8 +1608,9 @@ class Client(discord.Client):
         if Client.current_replay_upload:
             _, _, status = Client.current_replay_upload
             status.request_queue.put('discard')
+            await message.channel.send("One thread handed !discard")
         else:
-            await message.channel.send("No replay to discard")
+            await message.channel.send("Nothing to discard")
 
     @staticmethod
     async def manual_replay_handler(message: discord.message.Message, payload=None):
