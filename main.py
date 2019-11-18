@@ -1419,6 +1419,7 @@ class Client(discord.Client):
                     '!sd name1 name2',
                     '!get_captain_rank',
                     '!get_all_stats',
+                    '!show game_id',
                     'admin commands:',
                     '!unrank game_id',
                     '!rank game_id',
