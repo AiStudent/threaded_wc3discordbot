@@ -1428,7 +1428,7 @@ class Client(discord.Client):
                     '!delete game_id (deletes an unranked game)',
                     '!force_discard',
                     '!force_unlock',
-                    '!new_season']
+                    '!new_season (past can be seen on http://134.209.173.188 )']
         msg = '```'
         for command in commands:
             msg += command + '\n'
