@@ -125,13 +125,16 @@ def transfer_db(status, prints=False):
     clear_db()
     if prints:
         print('ins player')
-    insert_dict('player', player)
+    if player:
+        insert_dict('player', player)
     if prints:
         print('ins games')
-    insert_dict('games', games)
+    if games:
+        insert_dict('games', games)
     if prints:
         print('ins pg')
-    insert_dict('player_game', pg)
+    if pg:
+        insert_dict('player_game', pg)
 
 if __name__ == '__main__':
     class Status:
