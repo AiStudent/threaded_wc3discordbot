@@ -203,11 +203,11 @@ def structure_game_msg(winner, mins, secs, team1_win_elo_inc,
 
     msg += 'sentinel avg elo: ' + str(round(team1_avg_elo, 1)) + '\n'
     for dota_player in team1_dp:
-        msg += strwidthright(dota_player.name, 15, dota_player.kills, 4,
+        msg += strwidthright(dota_player.name, 17, dota_player.kills, 4,
                         dota_player.deaths, 4, dota_player.assists, 4) + '\n'
     msg += 'scourge avg elo: ' + str(round(team2_avg_elo, 1)) + '\n'
     for dota_player in team2_dp:
-        msg += strwidthright(dota_player.name, 15, dota_player.kills, 4,
+        msg += strwidthright(dota_player.name, 17, dota_player.kills, 4,
                         dota_player.deaths, 4, dota_player.assists, 4) + '\n'
     msg += "```"
     return msg
@@ -779,7 +779,7 @@ def show_game(game_id):
     player_games = fetchall(sql, game_id)
     for pg in player_games[:5]:
         name = get_player_id(pg['player_id'])['name']
-        msg += strwidthright(name, 15)
+        msg += strwidthright(name, 17)
         if game['withkda'] == 1:
             msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
         msg += '\n'
@@ -789,7 +789,7 @@ def show_game(game_id):
 
     for pg in player_games[5:]:
         name = get_player_id(pg['player_id'])['name']
-        msg += strwidthright(name, 15)
+        msg += strwidthright(name, 17)
         if game['withkda'] == 1:
             msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
         msg += '\n'
