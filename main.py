@@ -1338,11 +1338,12 @@ class Client(discord.Client):
         elif command == '!help':
             await self.help_handler(message)
         for attachment in message.attachments:
-            if attachment.filename[-4:] == '.w3g':
-                data = requests.get(attachment.url).content
-                await self.replay_handler(message, data)
-            else:
-                await messager.send('Not a wc3 replay.')
+            if admin:
+                if attachment.filename[-4:] == '.w3g':
+                    data = requests.get(attachment.url).content
+                    await self.replay_handler(message, data)
+                else:
+                    await messager.send('Not a wc3 replay.')
 
     @staticmethod
     async def force_unlock_handler(message):
