@@ -690,7 +690,7 @@ def get_teams_and_dbentries(dota_players):
     return team1, team2, db_entries, new_db_entries, old_db_entries
 
 
-def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=None, completion='complete'):
+def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=None, completion='unset'):
     # parse
     data = decompress_replay(replay)
 
