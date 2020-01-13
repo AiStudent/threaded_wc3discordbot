@@ -296,6 +296,7 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
                 'upload_time': date_and_time,
                 'hash': md5,
                 'ranked': 1,
+                'completion': 'complete',
                 'withkda': 1,
                 'withcs': 1,
                 'team1_elo': team1_avg_elo,
@@ -539,7 +540,14 @@ def put_entries_in_db(game_id, new_db_entries, old_db_entries):
             'deaths': db_entry.dota_player.deaths,
             'assists': db_entry.dota_player.assists,
             'cskills': db_entry.dota_player.cskills,
-            'csdenies': db_entry.dota_player.csdenies
+            'csdenies': db_entry.dota_player.csdenies,
+            'item1': db_entry.dota_player.item1,
+            'item2': db_entry.dota_player.item2,
+            'item3': db_entry.dota_player.item3,
+            'item4': db_entry.dota_player.item4,
+            'item5': db_entry.dota_player.item5,
+            'item6': db_entry.dota_player.item6,
+            'hero' : db_entry.dota_player.hero
         })
 
     # for old_db_entries
@@ -632,6 +640,7 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
              'upload_time': date_and_time,
              'hash': md5,
              'ranked': 1,
+             'completion': 'incomplete',
              'withkda': 1,
              'withcs': 1,
              'team1_elo': team1_avg_elo,
@@ -681,7 +690,7 @@ def get_teams_and_dbentries(dota_players):
     return team1, team2, db_entries, new_db_entries, old_db_entries
 
 
-def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=None):
+def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=None, completion='complete'):
     # parse
     data = decompress_replay(replay)
 
@@ -719,6 +728,7 @@ def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=
              'upload_time': date_and_time,
              'hash': md5,
              'ranked': 1,
+             'completion': completion,
              'withkda': 1,
              'withcs': 1,
              'team1_elo': team1_avg_elo,
@@ -807,6 +817,7 @@ def reupload_all_replays(status: Status, status_queue: queue.Queue):
         
         parts = file[:-4].split('_')
         date_and_time = parts[0] + '_' + parts[1]  # date, time
+        completion = parts[2]
         if parts[3] == 'sentinel':
             winner = 1
         elif parts[3] == 'scourge':
@@ -816,11 +827,11 @@ def reupload_all_replays(status: Status, status_queue: queue.Queue):
         mins = int(parts[4])
         secs = int(parts[5])    
         
-        if parts[2] == 'incomplete' or parts[2] == 'complete':
+        if completion == 'incomplete' or completion == 'complete':
             f = open('replays/' + file, 'rb')
             data = f.read()
             f.close()        
-            auto_replay_upload(data, date_and_time, winner, mins, secs)
+            auto_replay_upload(data, date_and_time, winner, mins, secs, completion)
         elif parts[2] == 'custom':
             f = open('replays/' + file, 'r')
             lines = f.readlines()
@@ -917,6 +928,7 @@ def auto_upload_typed(lines, winner, mins, secs):
             'duration': (60*mins+secs),
             'upload_time': upload_time,
             'ranked': 1,
+            'completion': 'custom',
             'withkda': withkda,
             'withcs': withcs,
             'hash': None,
@@ -1074,6 +1086,7 @@ def upload_typed_replay(payload: list, status: Status, status_queue: queue.Queue
             'duration': (60*mins+secs),
             'upload_time': upload_time,
             'ranked': 1,
+            'completion': 'custom',
             'withkda': withkda,
             'withcs': withcs,
             'hash': None,
