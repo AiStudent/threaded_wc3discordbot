@@ -4,7 +4,7 @@ import discord
 import asyncio
 from basic_functions import *
 from mysql import get_player, insert_player, insert_game, update_player, insert_player_game, get_game
-from mysql import fetchall, commit, update_game, get_player_id, update_player_game
+from mysql import fetchall, fetchone, commit, update_game, get_player_id, update_player_game
 import keys
 import requests
 import queue
@@ -274,9 +274,9 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
 
     while True:
         request = status.request_queue.get()
-        if request is 'discard':
+        if request == 'discard':
             return "Discarded the replay."
-        elif request is 'confirm':
+        elif request == 'confirm':
             break
 
     # status_queue.put("Uploading to db..")
@@ -586,9 +586,9 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
     while True:
         request = status.request_queue.get()
 
-        if request is 'discard':
+        if request == 'discard':
             return "Discarded the replay."
-        elif request[0] is 'manual':
+        elif request[0] == 'manual':
             winner = request[1]
             if winner.lower() == "sentinel":
                 winner = 1
@@ -620,9 +620,9 @@ def manual_input_replay(replay, status: Status, status_queue: queue.Queue):
 
     while True:
         request = status.request_queue.get()
-        if request is 'discard':
+        if request == 'discard':
             return "Discarded the replay."
-        elif request is 'confirm':
+        elif request == 'confirm':
             break
 
     status_queue.put("Uploading to db..")
@@ -1070,9 +1070,9 @@ def upload_typed_replay(payload: list, status: Status, status_queue: queue.Queue
 
     while True:
         request = status.request_queue.get()
-        if request is 'discard':
+        if request == 'discard':
             return "Discarded the replay."
-        elif request is 'confirm':
+        elif request == 'confirm':
             break
 
     status_queue.put("Uploading to db..")
@@ -1250,9 +1250,9 @@ def new_season(status: Status, status_queue: queue.Queue):
 
     while True:
         request = status.request_queue.get()
-        if request is 'discard':
+        if request == 'discard':
             return "Did not archive the season."
-        elif request is 'confirm':
+        elif request == 'confirm':
             break
 
     # get stats
@@ -1350,6 +1350,8 @@ class Client(discord.Client):
             await self.force_shutdown_handler(message)
         elif command == '!help':
             await self.help_handler(message)
+        elif command == '!register' and payload:
+            await self.register_handler(message, payload)
         for attachment in message.attachments:
             if admin:
                 if attachment.filename[-4:] == '.w3g':
@@ -1357,6 +1359,37 @@ class Client(discord.Client):
                     await self.replay_handler(message, data)
                 else:
                     await messager.send('Not a wc3 replay.')
+
+    @staticmethod
+    async def register_handler(message, payload):
+        # TODO Not implemented in current commit's database
+        bnet_tag = payload[0]
+        user = message.author
+
+        user_id = int(payload[1])
+
+        # check if discord_tag exists in players
+        sql = 'select * from player p where p.discord_id=%s'
+        player = fetchone(sql, (user_id))
+        if player:
+            if player['games'] == 0:
+                player['bnet_tag'] = bnet_tag
+                update_player(player)
+                msg = "Since you've 0 games your bnet tag was changed to: " + str(player['bnet_tag'])
+            else:
+                msg = "You're already registered as " + str(player['bnet_tag']) + '.'
+        else:
+            try:
+                insert_player({
+                    'display_name': user.display_name,
+                    'bnet_tag': bnet_tag,
+                    'discord_id': user_id
+                })
+                msg = "You've registered with bnet tag: " + bnet_tag
+            except pymysql.err.IntegrityError as e:
+                msg = "Exception: " + str(e)
+        msg = emb(msg)
+        await message.channel.send(msg)
 
     @staticmethod
     async def force_unlock_handler(message):

@@ -65,3 +65,7 @@ def search_replay_on_disk(upload_time):
         if file[:len(upload_time)] == upload_time:
             return file
     raise Exception('File not found: ' + upload_time + '*.w3g')
+
+
+def emb(string: str) -> str:
+    return "```" + string + "```"
