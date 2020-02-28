@@ -139,7 +139,7 @@ def insert_player(player):
 
 
 def get_player(name):
-    sql = "SELECT * FROM player WHERE display_name = %s"
+    sql = "SELECT * FROM player WHERE name = %s"
     return fetchone(sql, (name,))
 
 

@@ -68,7 +68,7 @@ class DBEntry:
         if isinstance(de, dict):
             self.player_id = de['player_id']
             self.bnet_tag = de['bnet_tag']
-            self.display_name = de['display_name']
+            self.dislay_name = de['name']
             self.discord_id = de['discord_id']
             self.elo = de['elo']
             self.games = de['games']
@@ -159,8 +159,8 @@ def sd_players(name: str, name2: str):
         from
         games g, player_game apg, player_game bpg, player a, player b
         where
-        a.display_name = %s and
-        b.display_name = %s and
+        a.name = %s and
+        b.name = %s and
         a.player_id = apg.player_id and
         b.player_id = bpg.player_id and
         apg.game_id = bpg.game_id and
@@ -685,7 +685,7 @@ def get_teams_and_dbentries(dota_players):
         db_entry = get_player_bnet(dota_player.name)
         if db_entry is None:
             db_entry = DBEntry(dota_player)
-            new_db_entries += [db_entry]
+            #new_db_entries += [db_entry]
             unregistered += [dota_player]
         else:
             db_entry = DBEntry(db_entry)
@@ -700,8 +700,8 @@ def get_teams_and_dbentries(dota_players):
 
         db_entries += [db_entry]
 
-    #if unregistered:
-    #    raise UnregisteredPlayers('Unregistered players: ' + str([dota_player.name for dota_player in unregistered]))
+    if unregistered:
+        raise UnregisteredPlayers('Unregistered players: ' + str([dota_player.name for dota_player in unregistered]))
 
     return team1, team2, db_entries, new_db_entries, old_db_entries
 
@@ -805,8 +805,8 @@ def show_game(game_id):
     player_games = fetchall(sql, game_id)
     for pg in player_games[:5]:
         player = get_player_id(pg['player_id'])
-        if player['display_name']:
-            name = player['display_name']
+        if player['name']:
+            name = player['name']
         else:
             name = player['bnet_tag']
         msg += strwidthright(name, 17)
@@ -819,8 +819,8 @@ def show_game(game_id):
 
     for pg in player_games[5:]:
         player = get_player_id(pg['player_id'])
-        if player['display_name']:
-            name = player['display_name']
+        if player['name']:
+            name = player['name']
         else:
             name = player['bnet_tag']
         msg += strwidthright(name, 17)
@@ -1251,7 +1251,7 @@ def get_all_stats():
     for player in rows:
         player_stats += strwidthleft(
             player['rank'], 4,
-            player['display_name'] or player['bnet_tag'], 18,
+            player['name'], 18,
             round(player['elo'],1), 8,
             player['wins'], 4,
             player['loss'], 4,
@@ -1391,34 +1391,31 @@ class Client(discord.Client):
         user_id = user.id
 
         # check if bnet_tag exists in players
-        player = get_player_bnet(bnet_tag)
+        player_bnet = get_player_bnet(bnet_tag)
         player_discord_id = get_player_discord_id(user.id)
-        if player_discord_id:
-            if player_discord_id['display_name'] != user.display_name:
-                player_discord_id['display_name'] = user.display_name
-                update_player(player_discord_id)
-                msg = "Your display name has been updated to " + player_discord_id['display_name']
-            else:
-                msg = "You're already registered with bnet tag " + str(player_discord_id['bnet_tag']) + \
-                      ' aka ' + player_discord_id['display_name']
-        else:
-            if player:
-                if player['display_name'] is None:
-                    player['display_name'] = user.display_name
-                    player['discord_id'] = user.id
-                    update_player(player)
-                    msg = "You have taken the existing bnet tag: " + str(player['bnet_tag'])
-                elif player['display_name'] == user.display_name:
-                    msg = "You're already registered as " + str(player['bnet_tag']) + ' aka ' + player['display_name']
-                else:
-                    msg = player['bnet_tag'] + ' is already taken by ' + player['display_name']
-            else:
+
+        if not player_bnet:
+            if not player_discord_id:
                 insert_player({
-                    'display_name': user.display_name,
+                    'name': user.display_name,
                     'bnet_tag': bnet_tag,
                     'discord_id': user_id
                 })
-                msg = "You've registered with the new bnet tag: " + bnet_tag
+                msg = "You've registered with bnet tag: " + bnet_tag
+
+            else:
+                player_discord_id['bnet_tag'] = bnet_tag
+                player_discord_id['name'] = user.display_name
+                update_player(player_discord_id)
+                msg = "Your have changed to bnet_tag " + player_discord_id['bnet_tag'] + ' aka ' + player_discord_id['name']
+        else:
+            if player_bnet['discord_id'] == user.id:
+                player_discord_id['name'] = user.display_name
+                update_player(player_discord_id)
+                msg = "Your have changed aka to" + player_discord_id['name']
+
+            else:
+                msg = "Bnet tag " + player_bnet['bnet_tag'] + ' is used by ' + player_bnet['name']
 
         msg = emb(msg)
         await message.channel.send(msg)
