@@ -139,13 +139,23 @@ def insert_player(player):
 
 
 def get_player(name):
-    sql = "SELECT * FROM player WHERE name = %s"
+    sql = "SELECT * FROM player WHERE display_name = %s"
     return fetchone(sql, (name,))
 
 
 def get_player_id(player_id):
     sql = "SELECT * FROM player WHERE player_id = %s"
     return fetchone(sql, (player_id,))
+
+
+def get_player_bnet(bnet_tag):
+    sql = "SELECT * FROM player WHERE bnet_tag = %s"
+    return fetchone(sql, (bnet_tag,))
+
+
+def get_player_discord_id(discord_id):
+    sql = "SELECT * FROM player WHERE discord_id = %s"
+    return fetchone(sql, (discord_id,))
 
 
 def update_player(player: dict, where = 'player_id'):

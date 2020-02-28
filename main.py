@@ -3,7 +3,8 @@ import time
 import discord
 import asyncio
 from basic_functions import *
-from mysql import get_player, insert_player, insert_game, update_player, insert_player_game, get_game
+from mysql import get_player, insert_player, insert_game, update_player,\
+    insert_player_game, get_game, get_player_bnet, get_player_discord_id
 from mysql import fetchall, fetchone, commit, update_game, get_player_id, update_player_game
 import keys
 import requests
@@ -22,6 +23,9 @@ from transferer import transfer_db
 import io
 
 
+class UnregisteredPlayers(Exception):
+    def __init__(self, msg):
+        self.msg = msg
 
 
 class Message:
@@ -63,7 +67,9 @@ class DBEntry:
         self.old_elo = None
         if isinstance(de, dict):
             self.player_id = de['player_id']
-            self.name = de['name']
+            self.bnet_tag = de['bnet_tag']
+            self.display_name = de['display_name']
+            self.discord_id = de['discord_id']
             self.elo = de['elo']
             self.games = de['games']
             self.kdagames = de['kdagames']
@@ -84,9 +90,9 @@ class DBEntry:
         if isinstance(de, DotaPlayer) or isinstance(de, str):
             self.player_id = None
             if isinstance(de, DotaPlayer):
-                self.name = de.name
+                self.bnet_tag = de.name
             else:
-                self.name = de
+                self.bnet_tag = de
             self.elo = 1000.0
             self.games = 0
             self.kdagames = 0
@@ -107,7 +113,7 @@ class DBEntry:
 
     def get_hm(self):
         hm = {
-            'name': self.name,
+            'bnet_tag': self.bnet_tag,
             'elo': self.elo,
             'games': self.games,
             'kdagames': self.kdagames,
@@ -137,7 +143,11 @@ class DBEntry:
 def sd_player(name: str):
     p = get_player(name.lower())
     if p is None:
+        p = get_player_bnet(name.lower())
+    if p is None:
         return 'No stats on ' + name
+    elif p['games'] == 0:
+        return name + ' has not played any games yet.'
     return name + ': ' + str(round(p['elo'], 1)) + ' elo, ' + \
         'W/L ' + slash_delimited(p['wins'], p['loss']) + ', avg KDA ' + \
         slash_delimited(round(p['avgkills'], 1), round(p['avgdeaths'], 1), round(p['avgassists'], 1))
@@ -149,8 +159,8 @@ def sd_players(name: str, name2: str):
         from
         games g, player_game apg, player_game bpg, player a, player b
         where
-        a.name = %s and
-        b.name = %s and
+        a.display_name = %s and
+        b.display_name = %s and
         a.player_id = apg.player_id and
         b.player_id = bpg.player_id and
         apg.game_id = bpg.game_id and
@@ -669,12 +679,14 @@ def get_teams_and_dbentries(dota_players):
     db_entries = []
     new_db_entries = []
     old_db_entries = []
+    unregistered = []
     for dota_player in dota_players:
         dota_player.name = dota_player.name.lower()
-        db_entry = get_player(dota_player.name)
+        db_entry = get_player_bnet(dota_player.name)
         if db_entry is None:
             db_entry = DBEntry(dota_player)
             new_db_entries += [db_entry]
+            unregistered += [dota_player]
         else:
             db_entry = DBEntry(db_entry)
             old_db_entries += [db_entry]
@@ -687,6 +699,10 @@ def get_teams_and_dbentries(dota_players):
             team2 += [db_entry]
 
         db_entries += [db_entry]
+
+    #if unregistered:
+    #    raise UnregisteredPlayers('Unregistered players: ' + str([dota_player.name for dota_player in unregistered]))
+
     return team1, team2, db_entries, new_db_entries, old_db_entries
 
 
@@ -788,7 +804,11 @@ def show_game(game_id):
     sql = "select * from player_game where game_id=%s order by slot_nr ASC"
     player_games = fetchall(sql, game_id)
     for pg in player_games[:5]:
-        name = get_player_id(pg['player_id'])['name']
+        player = get_player_id(pg['player_id'])
+        if player['display_name']:
+            name = player['display_name']
+        else:
+            name = player['bnet_tag']
         msg += strwidthright(name, 17)
         if game['withkda'] == 1:
             msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
@@ -798,7 +818,11 @@ def show_game(game_id):
            + str(round(-game['team1_elo_change'], 1)) + '\n'
 
     for pg in player_games[5:]:
-        name = get_player_id(pg['player_id'])['name']
+        player = get_player_id(pg['player_id'])
+        if player['display_name']:
+            name = player['display_name']
+        else:
+            name = player['bnet_tag']
         msg += strwidthright(name, 17)
         if game['withkda'] == 1:
             msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
@@ -1227,7 +1251,7 @@ def get_all_stats():
     for player in rows:
         player_stats += strwidthleft(
             player['rank'], 4,
-            player['name'], 18,
+            player['display_name'] or player['bnet_tag'], 18,
             round(player['elo'],1), 8,
             player['wins'], 4,
             player['loss'], 4,
@@ -1362,32 +1386,40 @@ class Client(discord.Client):
 
     @staticmethod
     async def register_handler(message, payload):
-        # TODO Not implemented in current commit's database
         bnet_tag = payload[0]
         user = message.author
+        user_id = user.id
 
-        user_id = int(payload[1])
-
-        # check if discord_tag exists in players
-        sql = 'select * from player p where p.discord_id=%s'
-        player = fetchone(sql, (user_id))
-        if player:
-            if player['games'] == 0:
-                player['bnet_tag'] = bnet_tag
-                update_player(player)
-                msg = "Since you've 0 games your bnet tag was changed to: " + str(player['bnet_tag'])
+        # check if bnet_tag exists in players
+        player = get_player_bnet(bnet_tag)
+        player_discord_id = get_player_discord_id(user.id)
+        if player_discord_id:
+            if player_discord_id['display_name'] != user.display_name:
+                player_discord_id['display_name'] = user.display_name
+                update_player(player_discord_id)
+                msg = "Your display name has been updated to " + player_discord_id['display_name']
             else:
-                msg = "You're already registered as " + str(player['bnet_tag']) + '.'
+                msg = "You're already registered with bnet tag " + str(player_discord_id['bnet_tag']) + \
+                      ' aka ' + player_discord_id['display_name']
         else:
-            try:
+            if player:
+                if player['display_name'] is None:
+                    player['display_name'] = user.display_name
+                    player['discord_id'] = user.id
+                    update_player(player)
+                    msg = "You have taken the existing bnet tag: " + str(player['bnet_tag'])
+                elif player['display_name'] == user.display_name:
+                    msg = "You're already registered as " + str(player['bnet_tag']) + ' aka ' + player['display_name']
+                else:
+                    msg = player['bnet_tag'] + ' is already taken by ' + player['display_name']
+            else:
                 insert_player({
                     'display_name': user.display_name,
                     'bnet_tag': bnet_tag,
                     'discord_id': user_id
                 })
-                msg = "You've registered with bnet tag: " + bnet_tag
-            except pymysql.err.IntegrityError as e:
-                msg = "Exception: " + str(e)
+                msg = "You've registered with the new bnet tag: " + bnet_tag
+
         msg = emb(msg)
         await message.channel.send(msg)
 
@@ -1570,6 +1602,9 @@ class Client(discord.Client):
                 await Client.manual_input_replay_handler(message, data)
             except NotDotaReplay:
                 await message.channel.send('Not a dota replay.')
+            except UnregisteredPlayers:
+                await message.channel.send(str(t1.exception.msg))
+
         else:
             await message.channel.send(t1.rv)
 
