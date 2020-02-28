@@ -1496,6 +1496,7 @@ class Client(discord.Client):
     async def help_handler(message):
         commands = ['!sd name',
                     '!sd name1 name2',
+                    '!register bnet_tag',
                     '!get_captain_rank',
                     '!get_all_stats',
                     '!show game_id',
