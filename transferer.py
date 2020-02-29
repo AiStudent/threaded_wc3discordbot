@@ -114,7 +114,7 @@ def transfer_db(status, prints=False):
     if prints:
         print('fetching')
     status.progress = 'Updating web server'
-    sql="select * from player"
+    sql="select * from player where rank!=NULL"
     player = fetchall(sql, ())
     sql="select * from games"
     games = fetchall(sql, ())
@@ -141,5 +141,10 @@ if __name__ == '__main__':
         def __init__(self):
             self.progress = None
     status = Status()
-    transfer_db(status)
+    #transfer_db(status)
 
+    sql="select * from player where elo>999"
+    player = fetchall(sql, ())
+
+    for p in player:
+        print(p)
