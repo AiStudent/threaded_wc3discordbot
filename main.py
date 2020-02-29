@@ -779,7 +779,7 @@ def modify_game_upload_time(game_id, new_upload_time):
 
 def rank_players(status):
     status.progress = "Ranking players.."
-    sql = "select * from player where games>0 ORDER BY elo DESC"
+    sql = "select * from player where rank ORDER BY elo DESC"
     players = fetchall(sql, ())
 
     for n in range(len(players)):
