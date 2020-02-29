@@ -1376,6 +1376,8 @@ class Client(discord.Client):
             await self.help_handler(message)
         elif command == '!register' and payload:
             await self.register_handler(message, payload)
+        elif command == '!force_register' and admin:
+            await self.force_register(message, payload)
         for attachment in message.attachments:
             if admin:
                 if attachment.filename[-4:] == '.w3g':
@@ -1386,6 +1388,19 @@ class Client(discord.Client):
                     await self.users_upload_handler(message, data)
                 else:
                     await messager.send('Not a wc3 replay.')
+
+    @staticmethod
+    async def force_register(message, payload):
+        discord_id = payload[0]
+        name = payload[1]
+        bnet_tag = payload[2]
+        insert_player({
+            'name': name,
+            'bnet_tag': bnet_tag,
+            'discord_id': int(discord_id)
+        })
+        msg = 'User added as discord id ' + discord_id + ', name ' + name + ', bnet tag ' + bnet_tag
+        await message.channel.send(emb(msg))
 
     @staticmethod
     async def users_upload_handler(message, data):
