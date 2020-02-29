@@ -1381,8 +1381,33 @@ class Client(discord.Client):
                 if attachment.filename[-4:] == '.w3g':
                     data = requests.get(attachment.url).content
                     await self.replay_handler(message, data)
+                elif attachment.filename == "users.txt":
+                    data = requests.get(attachment.url).content
+                    await self.users_upload_handler(message, data)
                 else:
                     await messager.send('Not a wc3 replay.')
+
+    @staticmethod
+    async def users_upload_handler(message, data):
+        lines = data.decode('utf-8')
+        lines = lines.split('\n')
+        n = 0
+        #try:
+        for line in lines:
+            n += 1
+            words = line.split()
+            print(words)
+            discord_id, bnet_tag = words
+            insert_player({
+                'name': message.guild.get_member(int(discord_id)).nick,
+                'bnet_tag': bnet_tag,
+                'discord_id': int(discord_id)
+            })
+        await message.channel.send(str(n) + ' users imported.')
+
+        #except Exception as e:
+        #    await message.channel.send(str(e))
+
 
     @staticmethod
     async def register_handler(message, payload):
