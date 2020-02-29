@@ -1396,6 +1396,8 @@ class Client(discord.Client):
         for line in lines:
             n += 1
             words = line.split()
+            if not words:
+                break
             print(words)
             discord_id, bnet_tag = words
             insert_player({
