@@ -1415,8 +1415,14 @@ class Client(discord.Client):
                 break
             print(words)
             discord_id, bnet_tag = words
+
+            member = message.guild.get_member(int(discord_id))
+            name = member.nick
+            if name is None:
+                name, _ = member.__str__().split('#')
+
             insert_player({
-                'name': message.guild.get_member(int(discord_id)).nick,
+                'name': name,
                 'bnet_tag': bnet_tag,
                 'discord_id': int(discord_id)
             })
@@ -1430,7 +1436,11 @@ class Client(discord.Client):
     async def register_handler(message, payload):
         bnet_tag = payload[0]
         user = message.author
-        user_id = user.id
+        discord_id = user.id
+
+        name = message.guild.get_member(int(discord_id)).nick
+        if name is None:
+            name, _ = user.__str__().split('#')
 
         # check if bnet_tag exists in players
         player_bnet = get_player_bnet(bnet_tag)
@@ -1441,7 +1451,7 @@ class Client(discord.Client):
                 insert_player({
                     'name': user.display_name,
                     'bnet_tag': bnet_tag,
-                    'discord_id': user_id
+                    'discord_id': discord_id
                 })
                 msg = "You've registered with bnet tag: " + bnet_tag
 
