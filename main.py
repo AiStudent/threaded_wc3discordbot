@@ -145,13 +145,15 @@ def sd_player(name: str):
     if p is None:
         p = get_player_bnet(name.lower())
     if p is None:
-        return 'No stats on ' + name
+        msg = 'No stats on ' + name
     elif p['games'] == 0:
-        return name + ' has not played any games yet.'
-    return name + ': ' + str(round(p['elo'], 1)) + ' elo, ' + \
+        msg = name + ' has not played any games yet.'
+    else:
+        msg = name + ': ' + str(round(p['elo'], 1)) + ' elo, ' + \
         'W/L ' + slash_delimited(p['wins'], p['loss']) + ', avg KDA ' + \
         slash_delimited(round(p['avgkills'], 1), round(p['avgdeaths'], 1), round(p['avgassists'], 1))
 
+    return emb(msg)
 
 def sd_players(name: str, name2: str):
     sql = '''select
