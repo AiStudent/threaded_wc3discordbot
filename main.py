@@ -1380,7 +1380,7 @@ class Client(discord.Client):
         elif command == '!link' and payload and (dota_role or admin):
             await self.link_handler(message, payload)
         elif command == '!checklink' and (dota_role or admin):
-            await self.checklink_handler(message)
+            await self.checklink_handler(message, payload)
         elif command == '!force_register' and admin:
             await self.force_register(message, payload)
         for attachment in message.attachments:
