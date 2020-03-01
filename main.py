@@ -1358,7 +1358,7 @@ class Client(discord.Client):
             await self.new_season_handler(message)
         elif command == '!manual' and payload:
             await self.manual_replay_handler(message, payload)
-        elif command == '!clear_db' and admin:
+        elif command == '!clear_db' and admin and False:
             await self.clear_db_handler(message)
         elif command == '!rank' and payload and admin:
             await self.rank_handler(message, payload)
@@ -1368,7 +1368,7 @@ class Client(discord.Client):
             await self.modify_game_upload_time_handler(message, payload)
         elif command == '!show' and payload:
             await self.show_game_handler(message, payload)
-        elif command == '!reupload_all_replays' and admin:
+        elif command == '!reupload_all_replays' and admin and False:
             await self.reupload_all_replays_handler(message)
         elif command == '!upload' and admin and payload:
             await self.upload_typed_replay_handler(message, payload)
