@@ -1400,22 +1400,29 @@ class Client(discord.Client):
     @staticmethod
     async def force_register(message, payload):
         try:
-            discord_id = payload[0][3:-1]
+            discord_id = int(payload[0][3:-1])
             bnet_tag = payload[1]
 
-            member = message.guild.get_member(int(discord_id))
+            member = message.guild.get_member(discord_id)
             name = member.nick
             if name is None:
                 name, _ = member.__str__().split('#')
 
             name = name.lower()
 
-            insert_player({
-                'name': name,
-                'bnet_tag': bnet_tag,
-                'discord_id': int(discord_id)
-            })
-            msg = 'User added:\nName: ' + name + ', Bnet tag: ' + bnet_tag
+            player_discord_id = get_player_discord_id(discord_id)
+            if player_discord_id:
+                player_discord_id['bnet_tag'] = bnet_tag
+                player_discord_id['name'] = name
+                update_player(player_discord_id)
+                msg = 'User changed to:\nName: ' + name + ', Bnet tag: ' + bnet_tag
+            else:
+                insert_player({
+                    'name': name,
+                    'bnet_tag': bnet_tag,
+                    'discord_id': int(discord_id)
+                })
+                msg = 'User added:\nName: ' + name + ', Bnet tag: ' + bnet_tag
             await message.channel.send(emb(msg))
         except Exception as e:
             await message.channel.send(e.__str__())
