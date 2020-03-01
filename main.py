@@ -1425,6 +1425,9 @@ class Client(discord.Client):
                 continue
 
             member = message.guild.get_member(int(discord_id))
+            if member is None:
+                continue
+                
             name = member.nick
             if name is None:
                 name, _ = member.__str__().split('#')
