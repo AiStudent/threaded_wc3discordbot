@@ -254,6 +254,9 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     data = decompress_replay(replay)
     dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
 
+    # debug
+    print([dota_player.name for dota_player in dota_players])
+
     # check if already uploaded
     stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
     md5 = get_hash(stats_bytes)
@@ -1396,16 +1399,26 @@ class Client(discord.Client):
 
     @staticmethod
     async def force_register(message, payload):
-        discord_id = payload[0]
-        name = payload[1]
-        bnet_tag = payload[2]
-        insert_player({
-            'name': name,
-            'bnet_tag': bnet_tag,
-            'discord_id': int(discord_id)
-        })
-        msg = 'User added as discord id ' + discord_id + ', name ' + name + ', bnet tag ' + bnet_tag
-        await message.channel.send(emb(msg))
+        try:
+            discord_id = payload[0][3:-1]
+            bnet_tag = payload[1]
+
+            member = message.guild.get_member(int(discord_id))
+            name = member.nick
+            if name is None:
+                name, _ = member.__str__().split('#')
+
+            name = name.lower()
+
+            insert_player({
+                'name': name,
+                'bnet_tag': bnet_tag,
+                'discord_id': int(discord_id)
+            })
+            msg = 'User added:\nName: ' + name + ', Bnet tag: ' + bnet_tag
+            await message.channel.send(emb(msg))
+        except Exception as e:
+            await message.channel.send(e.__str__())
 
     @staticmethod
     async def users_upload_handler(message, data):
