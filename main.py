@@ -1335,6 +1335,7 @@ class Client(discord.Client):
         author = message.author
         roles = [role.name for role in author.roles]
         admin = ('DotA-Admin' in roles) or ('Development' in roles)
+        dota_role = any([role in roles for role in ['DotA-Admin', 'DotA-Trial']])
         messager = Message(message.channel)
         if command == '!sd':
             await self.sd_handler(message, payload)
@@ -1376,8 +1377,10 @@ class Client(discord.Client):
             await self.force_shutdown_handler(message)
         elif command == '!help':
             await self.help_handler(message)
-        elif command == '!register' and payload:
-            await self.register_handler(message, payload)
+        elif command == '!link' and payload and (dota_role or admin):
+            await self.link_handler(message, payload)
+        elif command == '!checklink' and (dota_role or admin):
+            await self.checklink_handler(message)
         elif command == '!force_register' and admin:
             await self.force_register(message, payload)
         for attachment in message.attachments:
@@ -1435,7 +1438,17 @@ class Client(discord.Client):
 
 
     @staticmethod
-    async def register_handler(message, payload):
+    async def checklink_handler(message):
+        user = message.author
+        player_discord_id = get_player_discord_id(user.id)
+        if player_discord_id:
+            msg = "Your dota profile:\nBnet tag: " + player_discord_id['bnet_tag'] + ', Name: ' + player_discord_id['name']
+        else:
+            msg = "You don't have a dota profile. Type !link bnet_tag"
+        await message.channel.send(emb(msg))
+
+    @staticmethod
+    async def link_handler(message, payload):
         bnet_tag = payload[0]
         user = message.author
         discord_id = user.id
@@ -1455,21 +1468,21 @@ class Client(discord.Client):
                     'bnet_tag': bnet_tag,
                     'discord_id': discord_id
                 })
-                msg = "You've registered with bnet tag: " + bnet_tag
+                msg = "Created dota profile:\nBnet tag: " + bnet_tag + '\nName: ' + user.display_name
 
             else:
                 player_discord_id['bnet_tag'] = bnet_tag
                 player_discord_id['name'] = user.display_name
                 update_player(player_discord_id)
-                msg = "Your have changed to bnet_tag " + player_discord_id['bnet_tag'] + ' aka ' + player_discord_id['name']
+                msg = "Your dota profile have changed to:\nBnet tag: " + player_discord_id['bnet_tag'] + '\nName: ' + player_discord_id['name']
         else:
             if player_bnet['discord_id'] == user.id:
                 player_discord_id['name'] = user.display_name
                 update_player(player_discord_id)
-                msg = "Your have changed aka to" + player_discord_id['name']
+                msg = "Your dota profile have changed to:\nBnet tag: " + player_discord_id['bnet_tag'] + '\nName: ' + player_discord_id['name']
 
             else:
-                msg = "Bnet tag " + player_bnet['bnet_tag'] + ' is used by ' + player_bnet['name']
+                msg = "A dota profile with the bnet tag " + player_bnet['bnet_tag'] + ' is already used by ' + player_bnet['name']
 
         msg = emb(msg)
         await message.channel.send(msg)
