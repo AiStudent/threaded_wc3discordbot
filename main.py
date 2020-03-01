@@ -215,11 +215,11 @@ def structure_game_msg(winner, mins, secs, team1_win_elo_inc,
 
     msg += 'sentinel avg elo: ' + str(round(team1_avg_elo, 1)) + '\n'
     for dota_player in team1_dp:
-        msg += strwidthright(dota_player.name, 17, dota_player.kills, 4,
+        msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
                         dota_player.deaths, 4, dota_player.assists, 4) + '\n'
     msg += 'scourge avg elo: ' + str(round(team2_avg_elo, 1)) + '\n'
     for dota_player in team2_dp:
-        msg += strwidthright(dota_player.name, 17, dota_player.kills, 4,
+        msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
                         dota_player.deaths, 4, dota_player.assists, 4) + '\n'
     msg += "```"
     return msg
