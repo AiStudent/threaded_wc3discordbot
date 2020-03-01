@@ -1421,6 +1421,9 @@ class Client(discord.Client):
             print(words)
             discord_id, bnet_tag = words
 
+            if get_player_discord_id(discord_id):
+                continue
+
             member = message.guild.get_member(int(discord_id))
             name = member.nick
             if name is None:
