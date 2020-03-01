@@ -1418,7 +1418,7 @@ class Client(discord.Client):
             words = line.split()
             if not words:
                 break
-            print(words)
+
             discord_id, bnet_tag = words
 
             if get_player_discord_id(discord_id):
@@ -1427,14 +1427,14 @@ class Client(discord.Client):
             member = message.guild.get_member(int(discord_id))
             if member is None:
                 continue
-                
+
             name = member.nick
             if name is None:
                 name, _ = member.__str__().split('#')
 
             insert_player({
-                'name': name,
-                'bnet_tag': bnet_tag,
+                'name': name.lower(),
+                'bnet_tag': bnet_tag.lower(),
                 'discord_id': int(discord_id)
             })
         await message.channel.send(str(n) + ' users imported.')
@@ -1444,7 +1444,7 @@ class Client(discord.Client):
 
 
     @staticmethod
-    async def checklink_handler(message):
+    async def checklink_handler(message, payload):
         user = message.author
         player_discord_id = get_player_discord_id(user.id)
         if player_discord_id:
@@ -1455,7 +1455,7 @@ class Client(discord.Client):
 
     @staticmethod
     async def link_handler(message, payload):
-        bnet_tag = payload[0]
+        bnet_tag = payload[0].lower()
         user = message.author
         discord_id = user.id
 
@@ -1463,6 +1463,7 @@ class Client(discord.Client):
         if name is None:
             name, _ = user.__str__().split('#')
 
+        name = name.lower()
         # check if bnet_tag exists in players
         player_bnet = get_player_bnet(bnet_tag)
         player_discord_id = get_player_discord_id(user.id)
@@ -1470,7 +1471,7 @@ class Client(discord.Client):
         if not player_bnet:
             if not player_discord_id:
                 insert_player({
-                    'name': user.display_name,
+                    'name': name,
                     'bnet_tag': bnet_tag,
                     'discord_id': discord_id
                 })
@@ -1478,12 +1479,12 @@ class Client(discord.Client):
 
             else:
                 player_discord_id['bnet_tag'] = bnet_tag
-                player_discord_id['name'] = user.display_name
+                player_discord_id['name'] = name
                 update_player(player_discord_id)
                 msg = "Your dota profile have changed to:\nBnet tag: " + player_discord_id['bnet_tag'] + '\nName: ' + player_discord_id['name']
         else:
             if player_bnet['discord_id'] == user.id:
-                player_discord_id['name'] = user.display_name
+                player_discord_id['name'] = name
                 update_player(player_discord_id)
                 msg = "Your dota profile have changed to:\nBnet tag: " + player_discord_id['bnet_tag'] + '\nName: ' + player_discord_id['name']
 
