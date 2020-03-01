@@ -1335,7 +1335,7 @@ class Client(discord.Client):
         author = message.author
         roles = [role.name for role in author.roles]
         admin = ('DotA-Admin' in roles) or ('Development' in roles)
-        dota_role = any([role in roles for role in ['DotA-Admin', 'DotA-Trial']])
+        dota_role = any([role in roles for role in ['DotA-Admin', 'DotA-Trial', 'DotA']])
         messager = Message(message.channel)
         if command == '!sd':
             await self.sd_handler(message, payload)
