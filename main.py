@@ -1468,11 +1468,22 @@ class Client(discord.Client):
     @staticmethod
     async def checklink_handler(message, payload):
         user = message.author
-        player_discord_id = get_player_discord_id(user.id)
-        if player_discord_id:
-            msg = "Your dota profile:\nBnet tag: " + player_discord_id['bnet_tag'] + ', Name: ' + player_discord_id['name']
+        if payload:
+            discord_id = payload[3:-1]
         else:
-            msg = "You don't have a dota profile. Type !link bnet_tag"
+            discord_id = user.id
+
+        player_discord_id = get_player_discord_id(discord_id)
+        if player_discord_id:
+            if payload:
+                msg = "Dota profile:\nBnet tag: " + player_discord_id['bnet_tag'] + ', Name: ' + player_discord_id['name']
+            else:
+                msg = "Your dota profile:\nBnet tag: " + player_discord_id['bnet_tag'] + ', Name: ' + player_discord_id['name']
+        else:
+            if payload:
+                msg = "The user is not registered."
+            else:
+                msg = "You don't have a dota profile. Type !link bnet_tag"
         await message.channel.send(emb(msg))
 
     @staticmethod
