@@ -1469,7 +1469,7 @@ class Client(discord.Client):
     async def checklink_handler(message, payload):
         user = message.author
         if payload:
-            discord_id = payload[3:-1]
+            discord_id = int(payload[3:-1])
         else:
             discord_id = user.id
 
