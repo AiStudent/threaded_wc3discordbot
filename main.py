@@ -1200,6 +1200,8 @@ def capt_rank():
         from
         games g, player_game bluepg, player_game pinkpg, player blue, player pink
         where 
+        blue.rank and
+        pink.rank and
         g.game_id=bluepg.game_id and
         g.game_id=pinkpg.game_id and
         bluepg.slot_nr=0 and
@@ -1240,7 +1242,7 @@ def capt_rank():
     rank = 1
     for player in list_players:
         name, wins, loss = player
-        msg += strwidthleft(rank, 4, name, 18, wins, 4, loss, 4) + "\n"
+        msg += strwidthleft(str(rank), 4, name, 18, wins, 4, loss, 4) + "\n"
         rank += 1
 
     # return all
@@ -1249,14 +1251,14 @@ def capt_rank():
 
 def get_all_stats():
     # normal ranking
-    sql = "select * from player order by rank"
+    sql = "select * from player where rank order by rank"
     rows = fetchall(sql, ())
 
     player_stats = ""
     for player in rows:
         player_stats += strwidthleft(
             player['rank'], 4,
-            player['name'], 18,
+            player['name'], 23,
             round(player['elo'],1), 8,
             player['wins'], 4,
             player['loss'], 4,
