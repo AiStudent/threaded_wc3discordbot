@@ -1362,9 +1362,9 @@ class Client(discord.Client):
             await self.manual_replay_handler(message, payload)
         elif command == '!clear_db' and admin and False:
             await self.clear_db_handler(message)
-        elif command == '!rank' and payload and admin:
+        elif command == '!rank_game' and payload and admin:
             await self.rank_handler(message, payload)
-        elif command == '!unrank' and payload and admin:
+        elif command == '!unrank_game' and payload and admin:
             await self.unrank_handler(message, payload)
         elif command == '!setdate' and payload and admin:
             await self.modify_game_upload_time_handler(message, payload)
@@ -1605,8 +1605,8 @@ class Client(discord.Client):
                     '!get_all_stats',
                     '!show game_id',
                     'admin commands:',
-                    '!unrank game_id',
-                    '!rank game_id',
+                    '!unrank_game game_id',
+                    '!rank_game game_id',
                     '!setdate game_id yyyymmdd_xxhxxmxxs',
                     '!reupload_all_replays (in order of upload time)',
                     '!delete game_id (deletes an unranked game)',
