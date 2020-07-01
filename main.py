@@ -755,7 +755,7 @@ def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=
              'team1_elo': team1_avg_elo,
              'team2_elo': team2_avg_elo,
              'team1_elo_change': t1_elo_change,
-             'elo_alg': '1.0'
+             'elo_alg': '1.1'
              }
         )
 

@@ -40,12 +40,14 @@ def teams_update_elo(team1, team2, winner):
     team1_win_elo_inc, team2_win_elo_inc = team_win_elos(team1, team2)
 
     if winner == 1 or winner == 'sentinel':
+        team1[0].elo += 2   # 1.1 extra elo for winning captains
         for player in team1:
             player.elo += team1_win_elo_inc
         for player in team2:
             player.elo += -team1_win_elo_inc
         return team1_win_elo_inc, -team1_win_elo_inc
     elif winner == 2 or winner == 'scourge':
+        team2[0].elo += 2
         for player in team1:
             player.elo += -team2_win_elo_inc
         for player in team2:
