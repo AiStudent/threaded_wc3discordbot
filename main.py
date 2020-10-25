@@ -526,15 +526,23 @@ def reset_stats_of_latest_game(game_id):
         update_player(p)
 
 
-def cleard_db():
+def cleard_db(save_users=False):
     sql = "delete from games"
     commit(sql, ())
+
     sql = "ALTER TABLE games AUTO_INCREMENT = 1"
     commit(sql, ())
-    sql = "delete from player"
-    commit(sql, ())
-    sql = "ALTER TABLE player AUTO_INCREMENT = 1"
-    commit(sql, ())
+
+    if save_users:
+        sql = "update player set rank=NULL, elo=1000, games=0, wins=0, loss=0, draw=0, kills=0, deaths=0, assists=0, cskills=0, csdenies=0,"
+        sql2 = "kdagames=0, csgames=0, avgkills=NULL, avgdeaths=NULL, avgassists=NULL, avgcskills=NULL, avgcsdenies=NULL"
+        commit(sql+sql2, ())
+    else:
+        sql = "delete from player"
+        commit(sql, ())
+        sql = "ALTER TABLE player AUTO_INCREMENT = 1"
+        commit(sql, ())
+
     sql = "delete from player_game"
     commit(sql, ())
 
@@ -1308,7 +1316,7 @@ def new_season(status: Status, status_queue: queue.Queue):
     f.close()
 
     # cleardb
-    cleard_db()
+    cleard_db(save_users=True)
     if keys.REMOTE_DB:
         transfer_db(status)
 
