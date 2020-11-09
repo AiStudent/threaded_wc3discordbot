@@ -1397,7 +1397,7 @@ class Client(discord.Client):
         elif command == '!force_register' and admin:
             await self.force_register(message, payload)
         for attachment in message.attachments:
-            if admin:
+            if admin and message.channel.id == 600362844969762848:
                 if attachment.filename[-4:] == '.w3g':
                     data = requests.get(attachment.url).content
                     await self.replay_handler(message, data)
