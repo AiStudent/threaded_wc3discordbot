@@ -1412,13 +1412,17 @@ class Client(discord.Client):
         try:
             discord_id = int(payload[0][3:-1])
             bnet_tag = payload[1]
-
             member = message.guild.get_member(discord_id)
+
+            """
             name = member.nick
+
             if name is None:
                 name, _ = member.__str__().split('#')
 
             name = name.lower()
+            """
+            name = member.display_name.lower()
 
             player_discord_id = get_player_discord_id(discord_id)
             if player_discord_id:
@@ -1499,12 +1503,8 @@ class Client(discord.Client):
         bnet_tag = payload[0].lower()
         user = message.author
         discord_id = user.id
+        name = user.display_name.lower()
 
-        name = message.guild.get_member(int(discord_id)).nick
-        if name is None:
-            name, _ = user.__str__().split('#')
-
-        name = name.lower()
         # check if bnet_tag exists in players
         player_bnet = get_player_bnet(bnet_tag)
         player_discord_id = get_player_discord_id(user.id)
@@ -1980,5 +1980,7 @@ class Client(discord.Client):
         quit()
 
 
-client = Client()
+intents = discord.Intents.default()
+intents.members = True
+client = Client(intents=intents)
 client.run(keys.TOKEN)
