@@ -47,7 +47,7 @@ def teams_update_elo(team1, team2, winner):
             player.elo += -team1_win_elo_inc
         return team1_win_elo_inc, -team1_win_elo_inc
     elif winner == 2 or winner == 'scourge':
-        team2[0].elo += 2
+        team2[0].elo += 3
         for player in team1:
             player.elo += -team2_win_elo_inc
         for player in team2:
