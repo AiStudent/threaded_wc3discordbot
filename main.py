@@ -845,7 +845,7 @@ def show_game(game_id):
 
 
 def reupload_all_replays(status: Status, status_queue: queue.Queue):
-    cleard_db()
+    cleard_db(save_users=True)
     status_queue.put("cleared db")
     n = 0
     files = sorted(os.listdir('replays'))
@@ -1425,7 +1425,11 @@ class Client(discord.Client):
             name = member.display_name.lower()
 
             player_discord_id = get_player_discord_id(discord_id)
+            if not player_discord_id:
+                player_discord_id = get_player_bnet(bnet_tag)
+
             if player_discord_id:
+                player_discord_id['discord_id'] = int(discord_id)
                 player_discord_id['bnet_tag'] = bnet_tag
                 player_discord_id['name'] = name
                 update_player(player_discord_id)
