@@ -331,7 +331,7 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     rank_players(status)
     if keys.REMOTE_DB:
         transfer_db(status)
-    return "Replay uploaded to db. Game ID: " + str(game_id)
+    return "Replay uploaded to db. https://stats.firstbloodgaming.com/game/" + str(game_id)
 
 
 def rank_game(game_id, status):
