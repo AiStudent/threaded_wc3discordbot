@@ -246,8 +246,6 @@ def add_dp_dbentries(dota_players, db_entries, winner):
         db_entry.assists += dota_player.assists
         db_entry.cskills += dota_player.cskills
         db_entry.csdenies += dota_player.csdenies
-        print(db_entry.wards, dota_player.name, dota_player.player_id, dota_player.wards)
-
         db_entry.wards += dota_player.wards
         db_entry.avgkills = db_entry.kills / db_entry.kdagames
         db_entry.avgdeaths = db_entry.deaths / db_entry.kdagames
@@ -283,8 +281,10 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     t1_elo_change, t2_elo_change = teams_update_elo(team1, team2, winner)
 
     # add up stats
-    add_dp_dbentries(dota_players, db_entries, winner)
-
+    try:
+        add_dp_dbentries(dota_players, db_entries, winner)
+    except TypeError:
+        return "Replay contains a finished game but is outdated and missing some player stats."
     # structure statistics return message
     winner = ['sentinel', 'scourge'][winner-1]
 
