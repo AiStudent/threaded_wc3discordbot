@@ -87,6 +87,7 @@ class DBEntry:
             self.avgassists = de['avgassists']
             self.avgcskills = de['avgcskills']
             self.avgcsdenies = de['avgcsdenies']
+            self.wards = de['wards']
         if isinstance(de, DotaPlayer) or isinstance(de, str):
             self.player_id = None
             if isinstance(de, DotaPlayer):
@@ -110,6 +111,7 @@ class DBEntry:
             self.avgassists = 0.0
             self.avgcskills = 0.0
             self.avgcsdenies = 0.0
+            self.wards = 0
 
     def get_hm(self):
         hm = {
@@ -130,7 +132,8 @@ class DBEntry:
             'avgdeaths': self.avgdeaths,
             'avgassists': self.avgassists,
             'avgcskills': self.avgcskills,
-            'avgcsdenies': self.avgcsdenies
+            'avgcsdenies': self.avgcsdenies,
+            'wards': self.wards
         }
         if self.player_id:
             hm['player_id'] = self.player_id
@@ -151,7 +154,8 @@ def sd_player(name: str):
     else:
         msg = name + ': ' + str(round(p['elo'], 1)) + ' elo, ' + \
         'W/L ' + slash_delimited(p['wins'], p['loss']) + ', avg KDA ' + \
-        slash_delimited(round(p['avgkills'], 1), round(p['avgdeaths'], 1), round(p['avgassists'], 1))
+        slash_delimited(round(p['avgkills'], 1), round(p['avgdeaths'], 1), round(p['avgassists'], 1)) +\
+        ', avg wards ' + str(p['wards'])
 
     return emb(msg)
 
@@ -216,11 +220,11 @@ def structure_game_msg(winner, mins, secs, team1_win_elo_inc,
     msg += 'sentinel avg elo: ' + str(round(team1_avg_elo, 1)) + '\n'
     for dota_player in team1_dp:
         msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
-                        dota_player.deaths, 4, dota_player.assists, 4) + '\n'
+                        dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4) + '\n'
     msg += 'scourge avg elo: ' + str(round(team2_avg_elo, 1)) + '\n'
     for dota_player in team2_dp:
         msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
-                        dota_player.deaths, 4, dota_player.assists, 4) + '\n'
+                        dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4) + '\n'
     msg += "```"
     return msg
 
@@ -242,12 +246,15 @@ def add_dp_dbentries(dota_players, db_entries, winner):
         db_entry.assists += dota_player.assists
         db_entry.cskills += dota_player.cskills
         db_entry.csdenies += dota_player.csdenies
+        print(db_entry.wards, dota_player.name, dota_player.player_id, dota_player.wards)
+
+        db_entry.wards += dota_player.wards
         db_entry.avgkills = db_entry.kills / db_entry.kdagames
         db_entry.avgdeaths = db_entry.deaths / db_entry.kdagames
         db_entry.avgassists = db_entry.assists / db_entry.kdagames
         db_entry.avgcskills = db_entry.cskills / db_entry.csgames
         db_entry.avgcsdenies = db_entry.csdenies / db_entry.csgames
-
+        db_entry.avgwards = dota_player.wards / db_entry.kdagames
 
 def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue):
     status_queue.put('Attempting to decompress..')
@@ -255,7 +262,7 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
 
     # debug
-    print([dota_player.name for dota_player in dota_players])
+    print([dota_player.name + " " + str(dota_player.wards) for dota_player in dota_players])
 
     # check if already uploaded
     stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
@@ -431,9 +438,11 @@ def recalculate_elo_from_game(upload_time, status=None):
                 p['kills'] += pg['kills']
                 p['deaths'] += pg['deaths']
                 p['assists'] += pg['assists']
+                p['wards'] += pg['wards']
                 p['avgkills'] = p['kills'] / p['kdagames']
                 p['avgdeaths'] = p['deaths'] / p['kdagames']
                 p['avgassists'] = p['assists'] / p['kdagames']
+                p['avgwards'] = p['wards'] / p['kdagames']
             if game['withcs'] == 1:
                 p['csgames'] += 1
                 p['cskills'] += pg['cskills']
@@ -504,6 +513,7 @@ def reset_stats_of_latest_game(game_id):
             p['kills'] -= pg['kills']
             p['deaths'] -= pg['deaths']
             p['assists'] -= pg['assists']
+            p['wards'] -= pg['wards']
         if game['withcs'] == 1:
             p['csgames'] -= 1
             p['cskills'] -= pg['cskills']
@@ -512,10 +522,12 @@ def reset_stats_of_latest_game(game_id):
             p['avgkills'] = p['kills'] / p['kdagames']
             p['avgdeaths'] = p['deaths'] / p['kdagames']
             p['avgassists'] = p['assists'] / p['kdagames']
+            p['avgwards'] = p['wards'] / p['kdagames']
         else:
             p['avgkills'] = 0
             p['avgdeaths'] = 0
             p['avgassists'] = 0
+            p['wards'] = 0
         if p['csgames'] > 0:
             p['avgcskills'] = p['avgcskills'] / p['csgames']
             p['avgcsdenies'] = p['avgcsdenies'] / p['csgames']
@@ -535,7 +547,7 @@ def cleard_db(save_users=False):
 
     if save_users:
         sql = "update player set rank=NULL, elo=1000, games=0, wins=0, loss=0, draw=0, kills=0, deaths=0, assists=0, cskills=0, csdenies=0,"
-        sql2 = "kdagames=0, csgames=0, avgkills=NULL, avgdeaths=NULL, avgassists=NULL, avgcskills=NULL, avgcsdenies=NULL"
+        sql2 = "wards=0, kdagames=0, csgames=0, avgkills=NULL, avgdeaths=NULL, avgassists=NULL, avgcskills=NULL, avgcsdenies=NULL, avgwards=NULL"
         commit(sql+sql2, ())
     else:
         sql = "delete from player"
@@ -564,6 +576,7 @@ def put_entries_in_db(game_id, new_db_entries, old_db_entries):
             'assists': db_entry.dota_player.assists,
             'cskills': db_entry.dota_player.cskills,
             'csdenies': db_entry.dota_player.csdenies,
+            'wards': db_entry.dota_player.wards,
             'item1': db_entry.dota_player.item1,
             'item2': db_entry.dota_player.item2,
             'item3': db_entry.dota_player.item3,
@@ -698,8 +711,10 @@ def get_teams_and_dbentries(dota_players):
         db_entry = get_player_bnet(dota_player.name)
         if db_entry is None:
             db_entry = DBEntry(dota_player)
-            #new_db_entries += [db_entry]
-            unregistered += [dota_player]
+            if keys.REMOTE_DB:
+                unregistered += [dota_player]
+            else:
+                new_db_entries += [db_entry]
         else:
             db_entry = DBEntry(db_entry)
             old_db_entries += [db_entry]
@@ -824,7 +839,7 @@ def show_game(game_id):
             name = player['bnet_tag']
         msg += strwidthright(name, 17)
         if game['withkda'] == 1:
-            msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
+            msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4, pg['wards'], 4)
         msg += '\n'
 
     msg += "scourge elo: " + str(round(game['team2_elo'], 1)) + ", change: " \
@@ -838,7 +853,7 @@ def show_game(game_id):
             name = player['bnet_tag']
         msg += strwidthright(name, 17)
         if game['withkda'] == 1:
-            msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
+            msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4, pg['wards'], 4)
         msg += '\n'
     msg += "```"
     return msg
@@ -924,6 +939,7 @@ def auto_upload_typed(lines, winner, mins, secs):
         k = [int(words[n]) for n in range(1, 40, 4)]
         d = [int(words[n]) for n in range(2, 40, 4)]
         a = [int(words[n]) for n in range(3, 40, 4)]
+        # add wards
     else:
         raise Exception('auto_upload_typed wrong nr of arguments')
 
@@ -1270,9 +1286,11 @@ def get_all_stats():
             round(player['elo'],1), 8,
             player['wins'], 4,
             player['loss'], 4,
+            player['wards'], 4,
             round(player['avgkills'],1), 7,
             round(player['avgdeaths'],1), 7,
-            round(player['avgassists'],1), 7
+            round(player['avgassists'],1), 7,
+            round(player['avgwards'],1), 7
         ) + '\n'
 
     # captain ranking
@@ -1397,7 +1415,7 @@ class Client(discord.Client):
         elif command == '!force_register' and admin:
             await self.force_register(message, payload)
         for attachment in message.attachments:
-            if admin and message.channel.id == 600362844969762848:
+            if admin and message.channel.name == "replay-upload":
                 if attachment.filename[-4:] == '.w3g':
                     data = requests.get(attachment.url).content
                     await self.replay_handler(message, data)
@@ -1617,11 +1635,11 @@ class Client(discord.Client):
                     '!get_all_stats',
                     '!show game_id',
                     'admin commands:',
-                    '!unrank_game game_id',
-                    '!rank_game game_id',
-                    '!setdate game_id yyyymmdd_xxhxxmxxs',
-                    '!reupload_all_replays (in order of upload time)',
-                    '!delete game_id (deletes an unranked game)',
+                    #'!unrank_game game_id',
+                    #'!rank_game game_id',
+                    #'!setdate game_id yyyymmdd_xxhxxmxxs',
+                    #'!reupload_all_replays (in order of upload time)',
+                    #'!delete game_id (deletes an unranked game)',
                     '!force_discard',
                     '!force_unlock',
                     '!new_season (past can be seen on http://134.209.173.188 )']
