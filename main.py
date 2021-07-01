@@ -88,6 +88,7 @@ class DBEntry:
             self.avgcskills = de['avgcskills']
             self.avgcsdenies = de['avgcsdenies']
             self.wards = de['wards']
+            self.avgwards = de['avgwards']
         if isinstance(de, DotaPlayer) or isinstance(de, str):
             self.player_id = None
             if isinstance(de, DotaPlayer):
@@ -112,6 +113,7 @@ class DBEntry:
             self.avgcskills = 0.0
             self.avgcsdenies = 0.0
             self.wards = 0
+            self.avgwards = 0.0
 
     def get_hm(self):
         hm = {
@@ -133,7 +135,8 @@ class DBEntry:
             'avgassists': self.avgassists,
             'avgcskills': self.avgcskills,
             'avgcsdenies': self.avgcsdenies,
-            'wards': self.wards
+            'wards': self.wards,
+            'avgwards': self.avgwards
         }
         if self.player_id:
             hm['player_id'] = self.player_id
@@ -155,7 +158,7 @@ def sd_player(name: str):
         msg = name + ': ' + str(round(p['elo'], 1)) + ' elo, ' + \
         'W/L ' + slash_delimited(p['wins'], p['loss']) + ', avg KDA ' + \
         slash_delimited(round(p['avgkills'], 1), round(p['avgdeaths'], 1), round(p['avgassists'], 1)) +\
-        ', avg wards ' + str(p['wards'])
+        ', avg wards ' + str(p['avgwards'])
 
     return emb(msg)
 
@@ -246,6 +249,8 @@ def add_dp_dbentries(dota_players, db_entries, winner):
         db_entry.assists += dota_player.assists
         db_entry.cskills += dota_player.cskills
         db_entry.csdenies += dota_player.csdenies
+        if dota_player.wards is None:
+            dota_player.wards = 0
         db_entry.wards += dota_player.wards
         db_entry.avgkills = db_entry.kills / db_entry.kdagames
         db_entry.avgdeaths = db_entry.deaths / db_entry.kdagames
@@ -527,7 +532,7 @@ def reset_stats_of_latest_game(game_id):
             p['avgkills'] = 0
             p['avgdeaths'] = 0
             p['avgassists'] = 0
-            p['wards'] = 0
+            p['avgwards'] = 0
         if p['csgames'] > 0:
             p['avgcskills'] = p['avgcskills'] / p['csgames']
             p['avgcsdenies'] = p['avgcsdenies'] / p['csgames']
@@ -1386,7 +1391,7 @@ class Client(discord.Client):
             await self.new_season_handler(message)
         elif command == '!manual' and payload:
             await self.manual_replay_handler(message, payload)
-        elif command == '!clear_db' and admin and False:
+        elif command == '!clear_db' and admin:
             await self.clear_db_handler(message)
         elif command == '!rank_game' and payload and admin:
             await self.rank_handler(message, payload)
@@ -1655,7 +1660,7 @@ class Client(discord.Client):
             await message.channel.send("Db is currently locked.")
             return
         Client.lock = True
-        cleard_db()
+        cleard_db(save_users=True)
         Client.lock = False
         await message.channel.send("Cleared db.")
 

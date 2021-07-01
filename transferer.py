@@ -52,8 +52,23 @@ def fetch(sql, args, one: bool):
     return result
 
 
+def fetchbdb(sql, args, one: bool):
+    connection = connect_to_bdb()
+    with connection.cursor() as cursor:
+        cursor.execute(sql, args)
+        if one:
+            result = cursor.fetchone()
+        else:
+            result = cursor.fetchall()
+    connection.close()
+    return result
+
+
 def fetchall(sql, args):
     return fetch(sql, args, one=False)
+
+def fetchallbdb(sql, args):
+    return fetchbdb(sql, args, one=False)
 
 
 def fetchone(sql, args):
@@ -136,6 +151,8 @@ def transfer_db(status, prints=False):
     if pg:
         insert_dict('player_game', pg)
 
+
+
 if __name__ == '__main__':
     class Status:
         def __init__(self):
@@ -143,8 +160,13 @@ if __name__ == '__main__':
     status = Status()
     #transfer_db(status)
 
-    sql="select * from player where elo>999"
-    player = fetchall(sql, ())
+    #sql = "alter table player add wards int(11) default 0 after csdenies"
+    #commit(sql, ())
 
-    for p in player:
-        print(p)
+    sql = "describe player"
+    results = fetchallbdb(sql, ())
+    for result in results:
+        print(result)
+
+    print('done')
+
