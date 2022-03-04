@@ -158,7 +158,7 @@ def sd_player(name: str):
         msg = name + ': ' + str(round(p['elo'], 1)) + ' elo, ' + \
         'W/L ' + slash_delimited(p['wins'], p['loss']) + ', avg KDA ' + \
         slash_delimited(round(p['avgkills'], 1), round(p['avgdeaths'], 1), round(p['avgassists'], 1)) +\
-        ', avg wards ' + str(p['avgwards'])
+        ', avg wards ' + str(round(p['avgwards'], 1))
 
     return emb(msg)
 
@@ -1031,6 +1031,7 @@ def auto_upload_typed(lines, winner, mins, secs):
             db_entry.avgdeaths = db_entry.deaths / db_entry.kdagames
             db_entry.avgassists = db_entry.assists / db_entry.kdagames
 
+
     # insert new players
     for db_entry in new_db_entries:
         response = insert_player(db_entry.get_hm())
@@ -1292,6 +1293,27 @@ def get_all_stats():
     rows = fetchall(sql, ())
 
     player_stats = ""
+    player_stats += strwidthleft(
+        "r", 4,
+        "name", 23,
+        "elo", 8,
+        "W", 4,
+        'L', 4,
+        'K', 4,
+        'D', 4,
+        'A', 4,
+        'Wards', 6,
+        'cs', 7,
+        'csd', 4,
+        'avg:', 4,
+        'μK', 7,
+        'μD', 7,
+        'μA', 7,
+        'μWards', 7,
+        'μcs', 7,
+        'μcd', 7
+    ) + '\n'
+
     for player in rows:
         player_stats += strwidthleft(
             player['rank'], 4,
@@ -1299,11 +1321,18 @@ def get_all_stats():
             round(player['elo'],1), 8,
             player['wins'], 4,
             player['loss'], 4,
-            player['wards'], 4,
+            player['kills'], 4,
+            player['deaths'], 4,
+            player['assists'], 4,
+            player['wards'], 6,
+            player['cskills'], 7,
+            player['csdenies'], 9,
             round(player['avgkills'],1), 7,
             round(player['avgdeaths'],1), 7,
             round(player['avgassists'],1), 7,
-            round(player['avgwards'],1), 7
+            round(player['avgwards'],1), 7,
+            round(player['avgcskills'], 1), 7,
+            round(player['avgcsdenies'], 1), 7
         ) + '\n'
 
     # captain ranking
