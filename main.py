@@ -249,15 +249,18 @@ def add_dp_dbentries(dota_players, db_entries, winner):
         db_entry.assists += dota_player.assists
         db_entry.cskills += dota_player.cskills
         db_entry.csdenies += dota_player.csdenies
-        if dota_player.wards is None:
+
+        if dota_player.wards is None:  # handle old maps
             dota_player.wards = 0
+
         db_entry.wards += dota_player.wards
+
         db_entry.avgkills = db_entry.kills / db_entry.kdagames
         db_entry.avgdeaths = db_entry.deaths / db_entry.kdagames
         db_entry.avgassists = db_entry.assists / db_entry.kdagames
         db_entry.avgcskills = db_entry.cskills / db_entry.csgames
         db_entry.avgcsdenies = db_entry.csdenies / db_entry.csgames
-        db_entry.avgwards = dota_player.wards / db_entry.kdagames
+        db_entry.avgwards = db_entry.wards / db_entry.kdagames
 
 def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue):
     status_queue.put('Attempting to decompress..')
@@ -753,6 +756,7 @@ def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=
         dota_players, mode, unparsed = parse_incomplete_game(data)
         if winner is None:
             raise Exception('auto_replay_upload incomplete replay with no given arguments')
+
 
     stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
     md5 = get_hash(stats_bytes)
@@ -1401,11 +1405,13 @@ class Client(discord.Client):
             await self.rank_handler(message, payload)
         elif command == '!unrank_game' and payload and admin:
             await self.unrank_handler(message, payload)
+        elif command == '!recalculate_from_date' and payload and admin and False:  # DOES NOT ROLLBACK
+            await self.recalculate_from_date(message, payload)
         elif command == '!setdate' and payload and admin:
             await self.modify_game_upload_time_handler(message, payload)
         elif command == '!show' and payload:
             await self.show_game_handler(message, payload)
-        elif command == '!reupload_all_replays' and admin and False:
+        elif command == '!reupload_all_replays' and admin:
             await self.reupload_all_replays_handler(message)
         elif command == '!upload' and admin and payload:
             await self.upload_typed_replay_handler(message, payload)
@@ -1965,6 +1971,32 @@ class Client(discord.Client):
             await message.channel.send(t1.rv)
         Client.lock = False
 
+
+    @staticmethod
+    async def recalculate_from_date(message: discord.message.Message, payload):
+        if Client.lock:
+            await message.channel.send("db is currently locked")
+            return
+        Client.lock = True
+
+        response = Message(message.channel)
+
+        status = Status()
+        t1 = ThreadAnything(recalculate_elo_from_game, (payload,), status=status)
+        t1.start()
+
+        while t1.is_alive():
+            await response.send_status(status.progress)
+            await asyncio.sleep(0.1)
+
+        if t1.exception:
+            Client.lock = False
+            raise t1.exception
+
+        Client.lock = False
+        await response.send(t1.rv)
+
+
     @staticmethod
     async def reupload_all_replays_handler(message: discord.message.Message):
         if Client.lock:
@@ -2000,14 +2032,14 @@ class Client(discord.Client):
         if Client.lock:
             await message.channel.send("db is currently busy")
             return
-        print("shutdown..")
-        await message.channel.send("shutdown..")
+        print("shutting down..")
+        await message.channel.send("shutting down..")
         quit()
 
     @staticmethod
     async def force_shutdown_handler(message: discord.message.Message):
-        print("shutdown..")
-        await message.channel.send("shutdown..")
+        print("shutting down..")
+        await message.channel.send("shutting down..")
         quit()
 
 
