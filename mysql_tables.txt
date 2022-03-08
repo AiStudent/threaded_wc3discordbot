@@ -1,0 +1,79 @@
+
+
+CREATE TABLE `games` (
+   `game_id` int(11) NOT NULL AUTO_INCREMENT,
+   `mode` varchar(32) NULL,
+   `winner` varchar(32) NOT NULL,
+   `duration` int(11) NOT NULL,
+   `upload_time` varchar(32) NOT NULL,
+   `hash` varchar(32) NULL,
+   `ranked` int(11) NOT NULL,
+   `completion` varchar(32) NOT NULL,
+   `withkda` tinyint(1) NOT NULL,
+   `withcs`  tinyint(1) NOT NULL,
+   `team1_elo` double NOT NULL,
+   `team2_elo` double NOT NULL,
+   `team1_elo_change` double NOT NULL,
+   `elo_alg` varchar(8) NOT NULL,
+  PRIMARY KEY (`game_id`),
+  UNIQUE KEY `hash` (`hash`)
+);
+
+
+CREATE TABLE `player_game` (
+   `player_id` int(11) NOT NULL,
+   `game_id` int(11) NOT NULL,
+   `slot_nr` int(11) NOT NULL,
+   `elo_before` double NOT NULL,
+   `kills` int(11) NULL,
+   `deaths` int(11) NULL,
+   `assists` int(11) NULL,
+   `cskills` int(11) NULL,
+   `csdenies` int(11) NULL,
+   `wards` int(11) NULL,
+   `item1` varchar(20) NULL,
+   `item2` varchar(20) NULL,
+   `item3` varchar(20) NULL,
+   `item4` varchar(20) NULL,
+   `item5` varchar(20) NULL,
+   `item6` varchar(20) NULL,
+   `hero` varchar(20) NULL,
+  PRIMARY KEY (`player_id`, `game_id`)
+);
+
+CREATE TABLE `player` (
+   `player_id` int(11) NOT NULL AUTO_INCREMENT,
+   `rank` int(11) DEFAULT NULL,
+   `bnet_tag` varchar(64) DEFAULT NULL,
+   `discord_id` bigint(20) DEFAULT NULL,
+   `name` varchar(64) DEFAULT NULL,
+   `elo` double DEFAULT 1000,
+   `games` int(11) DEFAULT 0,
+   `wins` int(11) DEFAULT 0,
+   `loss` int(11) DEFAULT 0,
+   `draw` int(11) DEFAULT 0,
+   `kills` int(11) DEFAULT 0,
+   `deaths` int(11) DEFAULT 0,
+   `assists` int(11) DEFAULT 0,
+   `cskills` int(11) DEFAULT 0,
+   `csdenies` int(11) DEFAULT 0,
+   `wards` int(11) DEFAULT 0,
+   `kdagames` int(11) DEFAULT 0,
+   `csgames` int(11) DEFAULT 0,
+   `avgkills` double DEFAULT NULL,
+   `avgdeaths` double DEFAULT NULL,
+   `avgassists` double DEFAULT NULL,
+   `avgcskills` double DEFAULT NULL,
+   `avgcsdenies` double DEFAULT NULL,
+   `avgwards` double DEFAULT NULL,
+
+  PRIMARY KEY (`player_id`),
+  UNIQUE KEY `bnet_tag` (`bnet_tag`),
+  UNIQUE KEY `discord_id` (`discord_id`),
+  UNIQUE KEY `name` (`name`)
+);
+
+
+
+
+
