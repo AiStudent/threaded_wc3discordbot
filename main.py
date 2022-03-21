@@ -347,8 +347,9 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     if keys.REMOTE_DB:
         try:
             transfer_db(status)
-        except pymysql.err.OperationalError:
-            return "The game is uploaded to local database, but the bluehost webserver was busy so updating that later. Feel free to upload next game. https://stats.firstbloodgaming.com/game/" + str(game_id)
+        except pymysql.err.OperationalError as e:
+            print("bluehost rejected: ", e)
+            #return "The game is uploaded to local database, but the bluehost webserver was busy so updating that later. Feel free to upload next game. https://stats.firstbloodgaming.com/game/" + str(game_id)
 
     return "Replay uploaded to db. https://stats.firstbloodgaming.com/game/" + str(game_id)
 
