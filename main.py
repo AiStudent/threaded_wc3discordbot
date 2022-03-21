@@ -1474,6 +1474,10 @@ class Client(discord.Client):
         try:
             discord_id = int(payload[0][3:-1])
             bnet_tag = payload[1]
+            bnet_tag2 = None
+            if len(payload) > 2:
+                bnet_tag2 = payload[2]
+
             member = message.guild.get_member(discord_id)
 
             """
@@ -1493,9 +1497,14 @@ class Client(discord.Client):
             if player_discord_id:
                 player_discord_id['discord_id'] = int(discord_id)
                 player_discord_id['bnet_tag'] = bnet_tag
+                if bnet_tag2:
+                    player_discord_id['bnet_tag2'] = bnet_tag2
                 player_discord_id['name'] = name
                 update_player(player_discord_id)
-                msg = 'User changed to:\nName: ' + name + ', Bnet tag: ' + bnet_tag
+                if not bnet_tag2:
+                    msg = 'User changed to:\nName: ' + name + ', Bnet tag: ' + bnet_tag
+                else:
+                    msg = 'User changed to:\nName: ' + name + ', Bnet tag: ' + bnet_tag + ', Bnet tag2: ' + bnet_tag2
             else:
                 insert_player({
                     'name': name,

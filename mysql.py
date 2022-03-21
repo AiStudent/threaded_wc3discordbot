@@ -149,8 +149,8 @@ def get_player_id(player_id):
 
 
 def get_player_bnet(bnet_tag):
-    sql = "SELECT * FROM player WHERE bnet_tag = %s"
-    return fetchone(sql, (bnet_tag,))
+    sql = "SELECT * FROM player WHERE bnet_tag = %s OR bnet_tag2 =%s"
+    return fetchone(sql, (bnet_tag, bnet_tag,))
 
 
 def get_player_discord_id(discord_id):
