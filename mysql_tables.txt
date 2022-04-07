@@ -45,6 +45,7 @@ CREATE TABLE `player` (
    `player_id` int(11) NOT NULL AUTO_INCREMENT,
    `rank` int(11) DEFAULT NULL,
    `bnet_tag` varchar(64) DEFAULT NULL,
+   `bnet_tag2` varchar(64) DEFAULT NULL,
    `discord_id` bigint(20) DEFAULT NULL,
    `name` varchar(64) DEFAULT NULL,
    `elo` double DEFAULT 1000,
@@ -69,9 +70,14 @@ CREATE TABLE `player` (
 
   PRIMARY KEY (`player_id`),
   UNIQUE KEY `bnet_tag` (`bnet_tag`),
+  UNIQUE KEY `bnet_tag2` (`bnet_tag2`),
   UNIQUE KEY `discord_id` (`discord_id`),
   UNIQUE KEY `name` (`name`)
 );
+
+
+alter table player add column bnet_tag2 VARCHAR(64) unique DEFAULT NULL AFTER bnet_tag;
+SELECT * FROM player WHERE bnet_tag = "trees#11163" OR bnet_tag2 = "trees#123";
 
 
 
