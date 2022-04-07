@@ -1473,7 +1473,7 @@ class Client(discord.Client):
     @staticmethod
     async def force_register(message, payload):
         try:
-            discord_id = int(payload[0][2:-1])
+            discord_id = int(payload[0].replace('!', '')[2:-1])
             bnet_tag = payload[1]
             bnet_tag2 = None
             if len(payload) > 2:
@@ -1557,7 +1557,7 @@ class Client(discord.Client):
     async def checklink_handler(message, payload):
         user = message.author
         if payload:
-            discord_id = int(payload[0][2:-1])
+            discord_id = int(payload[0].replace('!', '')[2:-1])
         else:
             discord_id = user.id
 
