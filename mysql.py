@@ -191,10 +191,31 @@ testgame = {
         }
 
 
+def get_elo_history(bnet_tag):
+    sql = """(
+    select 
+        pg.elo_before 
+    from 
+        player_game pg, 
+        player p 
+    where 
+        pg.player_id = p.player_id and 
+        p.bnet_tag=%s 
+    order by pg.game_id asc
+    ) UNION (
+    select
+        elo 
+    from 
+        player 
+    where 
+        bnet_tag=%s
+    );
+    """
+    return fetchall(sql, (bnet_tag, bnet_tag))
+
+
 if __name__ == '__main__':
-    insert_game(testgame)
-    #game = get_game(2)
-    #print(game)
+    print(get_elo_history("ricefire#1366"))
 
 
 """

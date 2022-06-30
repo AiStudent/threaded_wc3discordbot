@@ -80,6 +80,13 @@ alter table player add column bnet_tag2 VARCHAR(64) unique DEFAULT NULL AFTER bn
 SELECT * FROM player WHERE bnet_tag = "trees#11163" OR bnet_tag2 = "trees#123";
 
 
+select elo_before from player_game where player_id = 1 union select elo from player where player_id = 1;
+select elo from player where player_id = 1;
+
+select elo_before as elo from player_game where player_id = 1 union select elo from player where player_id = 1;
 
 
 
+ricefire#1366
+
+select pg.elo_before from player_game pg, player p where pg.player_id = p.player_id and p.bnet_tag="ricefire#1366";
