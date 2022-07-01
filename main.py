@@ -227,7 +227,7 @@ def sd_players(name: str, name2: str):
 
 
 def structure_game_msg(winner, mins, secs, team1_win_elo_inc,
-                       team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo):
+                       team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo, tower_hero_damage=False):
     msg = "```Winner: " + winner + ', ' + str(mins) + 'm, ' + str(secs) + 's, elo ratio (' +\
           str(round(team1_win_elo_inc, 1)) + '/' + str(round(team2_win_elo_inc, 1)) + ')\n'
 
@@ -237,11 +237,13 @@ def structure_game_msg(winner, mins, secs, team1_win_elo_inc,
     msg += 'sentinel avg elo: ' + str(round(team1_avg_elo, 1)) + '\n'
     for dota_player in team1_dp:
         msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
-                        dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4, dota_player.hero_damage, 6, dota_player.tower_damage, 6) + '\n'
+                        dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4) + '\n'
+        # dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4, dota_player.hero_damage, 6, dota_player.tower_damage, 6) + '\n'
     msg += 'scourge avg elo: ' + str(round(team2_avg_elo, 1)) + '\n'
     for dota_player in team2_dp:
         msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
-                        dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4, dota_player.hero_damage, 6, dota_player.tower_damage, 6) + '\n'
+                        dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4) + '\n'
+        # dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4, dota_player.hero_damage, 6, dota_player.tower_damage, 6) + '\n'
     msg += "```"
     return msg
 
