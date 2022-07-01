@@ -31,6 +31,8 @@ CREATE TABLE `player_game` (
    `cskills` int(11) NULL,
    `csdenies` int(11) NULL,
    `wards` int(11) NULL,
+   `hero_damage` int(11) NULL,
+   `tower_damage` int(11) NULL,
    `item1` varchar(20) NULL,
    `item2` varchar(20) NULL,
    `item3` varchar(20) NULL,
@@ -59,6 +61,8 @@ CREATE TABLE `player` (
    `cskills` int(11) DEFAULT 0,
    `csdenies` int(11) DEFAULT 0,
    `wards` int(11) DEFAULT 0,
+   `hero_damage` int(11) DEFAULT 0,
+   `tower_damage` int(11) DEFAULT 0,
    `kdagames` int(11) DEFAULT 0,
    `csgames` int(11) DEFAULT 0,
    `avgkills` double DEFAULT NULL,
@@ -67,6 +71,8 @@ CREATE TABLE `player` (
    `avgcskills` double DEFAULT NULL,
    `avgcsdenies` double DEFAULT NULL,
    `avgwards` double DEFAULT NULL,
+   `avghero_damage` double DEFAULT NULL,
+   `avgtower_damage` double DEFAULT NULL,
 
   PRIMARY KEY (`player_id`),
   UNIQUE KEY `bnet_tag` (`bnet_tag`),
@@ -77,6 +83,18 @@ CREATE TABLE `player` (
 
 
 alter table player add column bnet_tag2 VARCHAR(64) unique DEFAULT NULL AFTER bnet_tag;
+
+alter table player add column hero_damage  int(11) DEFAULT 0 AFTER wards;
+alter table player add column tower_damage  int(11) DEFAULT 0 AFTER hero_damage;
+
+alter table player add column avghero_damage  double DEFAULT NULL AFTER avgwards;
+alter table player add column avgtower_damage  double DEFAULT NULL AFTER avghero_damage;
+
+alter table player_game add column hero_damage int(11) DEFAULT NULL AFTER wards;
+alter table player_game add column tower_damage int(11) DEFAULT NULL AFTER hero_damage;
+
+
+
 SELECT * FROM player WHERE bnet_tag = "trees#11163" OR bnet_tag2 = "trees#123";
 
 

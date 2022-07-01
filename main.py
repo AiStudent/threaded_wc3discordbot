@@ -146,7 +146,11 @@ class DBEntry:
             'avgcskills': self.avgcskills,
             'avgcsdenies': self.avgcsdenies,
             'wards': self.wards,
-            'avgwards': self.avgwards
+            'avgwards': self.avgwards,
+            'hero_damage': self.hero_damage,
+            'avghero_damage': self.avghero_damage,
+            'tower_damage': self.tower_damage,
+            'avgtower_damage': self.avgtower_damage
         }
         if self.player_id:
             hm['player_id'] = self.player_id
@@ -286,9 +290,6 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     status_queue.put('Attempting to decompress..')
     data = decompress_replay(replay)
     dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
-
-    # debug
-    #print([dota_player.name + " " + str(dota_player.wards) for dota_player in dota_players])
 
     # check if already uploaded
     stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
@@ -472,10 +473,14 @@ def recalculate_elo_from_game(upload_time, status=None):
                 p['deaths'] += pg['deaths']
                 p['assists'] += pg['assists']
                 p['wards'] += pg['wards']
+                p['hero_damage'] += pg['hero_damage']
+                p['tower_damage'] += pg['tower_damage']
                 p['avgkills'] = p['kills'] / p['kdagames']
                 p['avgdeaths'] = p['deaths'] / p['kdagames']
                 p['avgassists'] = p['assists'] / p['kdagames']
                 p['avgwards'] = p['wards'] / p['kdagames']
+                p['avghero_damage'] = p['hero_damage'] / p['kdagames']
+                p['avgtower_damage'] = p['tower_damage'] / p['kdagames']
             if game['withcs'] == 1:
                 p['csgames'] += 1
                 p['cskills'] += pg['cskills']
@@ -547,6 +552,8 @@ def reset_stats_of_latest_game(game_id):
             p['deaths'] -= pg['deaths']
             p['assists'] -= pg['assists']
             p['wards'] -= pg['wards']
+            p['hero_damage'] -= pg['hero_damage']
+            p['tower_damage'] -= pg['tower_damage']
         if game['withcs'] == 1:
             p['csgames'] -= 1
             p['cskills'] -= pg['cskills']
@@ -556,11 +563,15 @@ def reset_stats_of_latest_game(game_id):
             p['avgdeaths'] = p['deaths'] / p['kdagames']
             p['avgassists'] = p['assists'] / p['kdagames']
             p['avgwards'] = p['wards'] / p['kdagames']
+            p['avghero_damage'] = p['hero_damage'] / p['kdagames']
+            p['avgtower_damage'] = p['tower_damage'] / p['kdagames']
         else:
             p['avgkills'] = 0
             p['avgdeaths'] = 0
             p['avgassists'] = 0
             p['avgwards'] = 0
+            p['avghero_damage'] = 0
+            p['avgtower_damage'] = 0
         if p['csgames'] > 0:
             p['avgcskills'] = p['avgcskills'] / p['csgames']
             p['avgcsdenies'] = p['avgcsdenies'] / p['csgames']
@@ -571,7 +582,10 @@ def reset_stats_of_latest_game(game_id):
         update_player(p)
 
 
-def cleard_db(save_users=False):
+def cleard_db(save_users=True):
+    if keys.local_debugging:
+        save_users = False
+
     sql = "delete from games"
     commit(sql, ())
 
@@ -580,7 +594,7 @@ def cleard_db(save_users=False):
 
     if save_users:
         sql = "update player set rank=NULL, elo=1000, games=0, wins=0, loss=0, draw=0, kills=0, deaths=0, assists=0, cskills=0, csdenies=0,"
-        sql2 = "wards=0, kdagames=0, csgames=0, avgkills=NULL, avgdeaths=NULL, avgassists=NULL, avgcskills=NULL, avgcsdenies=NULL, avgwards=NULL"
+        sql2 = "wards=0, hero_damage=0, tower_damage=0, kdagames=0, csgames=0, avgkills=NULL, avgdeaths=NULL, avgassists=NULL, avgcskills=NULL, avgcsdenies=NULL, avgwards=NULL, avghero_damage=NULL, avgtower_damage=NULL"
         commit(sql+sql2, ())
     else:
         sql = "delete from player"
@@ -610,6 +624,8 @@ def put_entries_in_db(game_id, new_db_entries, old_db_entries):
             'cskills': db_entry.dota_player.cskills,
             'csdenies': db_entry.dota_player.csdenies,
             'wards': db_entry.dota_player.wards,
+            'hero_damage': db_entry.dota_player.hero_damage,
+            'tower_damage': db_entry.dota_player.tower_damage,
             'item1': db_entry.dota_player.item1,
             'item2': db_entry.dota_player.item2,
             'item3': db_entry.dota_player.item3,
@@ -873,7 +889,7 @@ def show_game(game_id):
             name = player['bnet_tag']
         msg += strwidthright(name, 17)
         if game['withkda'] == 1:
-            msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4, pg['wards'], 4)
+            msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4, pg['wards'], 4, pg['hero_damage'], 6, pg['tower_damage'], 6)
         msg += '\n'
 
     msg += "scourge elo: " + str(round(game['team2_elo'], 1)) + ", change: " \
@@ -887,7 +903,7 @@ def show_game(game_id):
             name = player['bnet_tag']
         msg += strwidthright(name, 17)
         if game['withkda'] == 1:
-            msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4, pg['wards'], 4)
+            msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4, pg['wards'], 4, pg['hero_damage'], 6, pg['tower_damage'], 6)
         msg += '\n'
     msg += "```"
     return msg
@@ -1320,10 +1336,12 @@ def get_all_stats():
         "elo", 8,
         "W", 4,
         'L', 4,
-        'K', 4,
-        'D', 4,
-        'A', 4,
+        'K', 5,
+        'D', 5,
+        'A', 5,
         'Wards', 6,
+        'herodmg', 8,
+        'twrdmg', 8,
         'cs', 7,
         'csd', 4,
         'avg:', 4,
@@ -1331,6 +1349,8 @@ def get_all_stats():
         'μD', 7,
         'μA', 7,
         'μWards', 7,
+        'μherodmg', 11,
+        'μtwrdmg', 11,
         'μcs', 7,
         'μcd', 7
     ) + '\n'
@@ -1342,16 +1362,20 @@ def get_all_stats():
             round(player['elo'],1), 8,
             player['wins'], 4,
             player['loss'], 4,
-            player['kills'], 4,
-            player['deaths'], 4,
-            player['assists'], 4,
+            player['kills'], 5,
+            player['deaths'], 5,
+            player['assists'], 5,
             player['wards'], 6,
+            player['hero_damage'], 8,
+            player['tower_damage'], 8,
             player['cskills'], 7,
             player['csdenies'], 9,
             round(player['avgkills'],1), 7,
             round(player['avgdeaths'],1), 7,
             round(player['avgassists'],1), 7,
             round(player['avgwards'],1), 7,
+            round(player['avghero_damage'],1), 11,
+            round(player['avgtower_damage'],1), 11,
             round(player['avgcskills'], 1), 7,
             round(player['avgcsdenies'], 1), 7
         ) + '\n'
