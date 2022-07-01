@@ -89,10 +89,10 @@ class DBEntry:
             self.avgcsdenies = de['avgcsdenies']
             self.wards = de['wards']
             self.avgwards = de['avgwards']
-            self.hero_damage = 0
-            self.avghero_damage = 0.0
-            self.tower_damage = 0
-            self.avgtower_damage = 0.0
+            self.hero_damage = de['hero_damage']
+            self.avghero_damage = de['avghero_damage']
+            self.tower_damage = de['tower_damage']
+            self.avgtower_damage = de['avgtower_damage']
 
 
         if isinstance(de, DotaPlayer) or isinstance(de, str):
