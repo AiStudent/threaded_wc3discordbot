@@ -89,6 +89,12 @@ class DBEntry:
             self.avgcsdenies = de['avgcsdenies']
             self.wards = de['wards']
             self.avgwards = de['avgwards']
+            self.hero_damage = 0
+            self.avghero_damage = 0.0
+            self.tower_damage = 0
+            self.avgtower_damage = 0.0
+
+
         if isinstance(de, DotaPlayer) or isinstance(de, str):
             self.player_id = None
             if isinstance(de, DotaPlayer):
@@ -114,6 +120,10 @@ class DBEntry:
             self.avgcsdenies = 0.0
             self.wards = 0
             self.avgwards = 0.0
+            self.hero_damage = 0
+            self.avghero_damage = 0.0
+            self.tower_damage = 0
+            self.avgtower_damage = 0.0
 
     def get_hm(self):
         hm = {
@@ -223,11 +233,11 @@ def structure_game_msg(winner, mins, secs, team1_win_elo_inc,
     msg += 'sentinel avg elo: ' + str(round(team1_avg_elo, 1)) + '\n'
     for dota_player in team1_dp:
         msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
-                        dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4) + '\n'
+                        dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4, dota_player.hero_damage, 6, dota_player.tower_damage, 6) + '\n'
     msg += 'scourge avg elo: ' + str(round(team2_avg_elo, 1)) + '\n'
     for dota_player in team2_dp:
         msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
-                        dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4) + '\n'
+                        dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4, dota_player.hero_damage, 6, dota_player.tower_damage, 6) + '\n'
     msg += "```"
     return msg
 
@@ -255,12 +265,22 @@ def add_dp_dbentries(dota_players, db_entries, winner):
 
         db_entry.wards += dota_player.wards
 
+        if dota_player.hero_damage is None:  # handle old maps
+            dota_player.hero_damage = 0
+            dota_player.tower_damage = 0
+
+        db_entry.hero_damage += dota_player.hero_damage
+        db_entry.tower_damage += dota_player.tower_damage
+
         db_entry.avgkills = db_entry.kills / db_entry.kdagames
         db_entry.avgdeaths = db_entry.deaths / db_entry.kdagames
         db_entry.avgassists = db_entry.assists / db_entry.kdagames
         db_entry.avgcskills = db_entry.cskills / db_entry.csgames
         db_entry.avgcsdenies = db_entry.csdenies / db_entry.csgames
         db_entry.avgwards = db_entry.wards / db_entry.kdagames
+        db_entry.avghero_damage = db_entry.hero_damage / db_entry.kdagames
+        db_entry.avgtower_damage = db_entry.tower_damage / db_entry.kdagames
+
 
 def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue):
     status_queue.put('Attempting to decompress..')
@@ -268,7 +288,7 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
 
     # debug
-    print([dota_player.name + " " + str(dota_player.wards) for dota_player in dota_players])
+    #print([dota_player.name + " " + str(dota_player.wards) for dota_player in dota_players])
 
     # check if already uploaded
     stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
@@ -351,7 +371,7 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
             print("bluehost rejected: ", e)
             #return "The game is uploaded to local database, but the bluehost webserver was busy so updating that later. Feel free to upload next game. https://stats.firstbloodgaming.com/game/" + str(game_id)
 
-    return "Replay uploaded to db. https://stats.firstbloodgaming.com/game/" + str(game_id)
+    return "Replay uploaded. https://stats.firstbloodgaming.com/game/" + str(game_id)
 
 
 def rank_game(game_id, status):
