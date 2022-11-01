@@ -1828,6 +1828,7 @@ class Client(discord.Client):
 
         if t1.exception:
             Client.lock = False
+
             try:
                 raise t1.exception
             except CouldNotDecompress:
@@ -1839,6 +1840,9 @@ class Client(discord.Client):
                 await message.channel.send('Not a dota replay.')
             except UnregisteredPlayers:
                 await message.channel.send(str(t1.exception.msg))
+            except Exception as e:
+                c = str(t1.exception.__class__.__name__)
+                await message.channel.send(c + ': ' + str(e))
 
         else:
             await message.channel.send(t1.rv)
@@ -2128,7 +2132,8 @@ class Client(discord.Client):
         quit()
 
 
-intents = discord.Intents.default()
+#intents = discord.Intents.default()
+intents = discord.Intents.all()
 intents.members = True
 client = Client(intents=intents)
 client.run(keys.TOKEN)
