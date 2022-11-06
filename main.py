@@ -890,6 +890,7 @@ def show_game(game_id):
         return None
 
     msg = "```"
+    msg += "Upload time:" + game['upload_time'] + '\n'
     msg += "Winner: " + game['winner'] + ", "
     duration = game['duration']
     mins = duration // 60
@@ -904,10 +905,7 @@ def show_game(game_id):
     teamsize = int(len(player_games) / 2)
     for pg in player_games[:teamsize]:
         player = get_player_id(pg['player_id'])
-        if player['name']:
-            name = player['name']
-        else:
-            name = player['bnet_tag']
+        name = player['bnet_tag']
         msg += strwidthright(name, 17)
         if game['withkda'] == 1:
             msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4, pg['wards'], 4, pg['hero_damage'], 6, pg['tower_damage'], 6)
@@ -918,10 +916,7 @@ def show_game(game_id):
 
     for pg in player_games[teamsize:]:
         player = get_player_id(pg['player_id'])
-        if player['name']:
-            name = player['name']
-        else:
-            name = player['bnet_tag']
+        name = player['bnet_tag']
         msg += strwidthright(name, 17)
         if game['withkda'] == 1:
             msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4, pg['wards'], 4, pg['hero_damage'], 6, pg['tower_damage'], 6)
@@ -1477,10 +1472,18 @@ class Client(discord.Client):
         if len(words) > 1:
             payload = words[1:]
 
+        # TODO Will need to exclude dota admins for lod force register
         author = message.author
         roles = [role.name for role in author.roles]
-        admin = ('DotA-Admin' in roles) or ('Development' in roles)
-        dota_role = any([role in roles for role in ['DotA-Admin', 'DotA-Trial', 'DotA']])
+        if keys.GAMETYPE == 'lod':
+            admin = ('LoD-Admin' in roles) or ('DotA-Admin' in roles) or ('Development' in roles)
+            dota_role = any([role in roles for role in ['LoD-Admin', 'LoD-Trial', 'LoD']])
+            upload_channel = 'lod-replay-upload'
+        else:
+            admin = ('DotA-Admin' in roles) or ('Development' in roles)
+            dota_role = any([role in roles for role in ['DotA-Admin', 'DotA-Trial', 'DotA']])
+            upload_channel = 'replay-upload'
+
         messager = Message(message.channel)
         if command == '!sd':
             await self.sd_handler(message, payload)
@@ -1531,7 +1534,7 @@ class Client(discord.Client):
         elif command == '!force_register' and admin:
             await self.force_register(message, payload)
         for attachment in message.attachments:
-            if admin and message.channel.name == "replay-upload":
+            if admin and message.channel.name == upload_channel:
                 if attachment.filename[-4:] == '.w3g':
                     data = requests.get(attachment.url).content
                     await self.replay_handler(message, data)
@@ -1765,8 +1768,6 @@ class Client(discord.Client):
                     #'!setdate game_id yyyymmdd_xxhxxmxxs',
                     #'!reupload_all_replays (in order of upload time)',
                     #'!delete game_id (deletes an unranked game)',
-                    '!force_discard',
-                    '!force_unlock',
                     '!new_season (past can be seen on http://134.209.173.188 )']
         msg = '```'
         for command in commands:
@@ -1865,9 +1866,12 @@ class Client(discord.Client):
                 await message.channel.send('Not a dota replay.')
             except UnregisteredPlayers:
                 await message.channel.send(str(t1.exception.msg))
-            #except Exception as e:
-            #    c = str(t1.exception.__class__.__name__)
-            #    await message.channel.send(c + ': ' + str(e))
+            except Exception as e:
+                Client.lock = False
+                Client.current_replay_upload = []
+                c = str(t1.exception.__class__.__name__)
+                await message.channel.send(c + ': ' + str(e))
+                raise e
 
         else:
             await message.channel.send(t1.rv)

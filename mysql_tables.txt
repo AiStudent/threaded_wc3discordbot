@@ -114,6 +114,6 @@ select pg.elo_before from player_game pg, player p where pg.player_id = p.player
 To work with korean characters:
 https://stackoverflow.com/questions/1008287/illegal-mix-of-collations-mysql-error
 SET collation_connection = 'utf8_general_ci';
-ALTER DATABASE your_database_name CHARACTER SET utf8 COLLATE utf8_general_ci;
-ALTER TABLE your_table_name CONVERT TO CHARACTER SET utf8 COLLATE utf8_general_ci;
+ALTER DATABASE lodstats CHARACTER SET utf8 COLLATE utf8_general_ci;
+ALTER TABLE player CONVERT TO CHARACTER SET utf8 COLLATE utf8_general_ci;
 
