@@ -300,12 +300,9 @@ def add_dp_dbentries(dota_players, db_entries, winner):
 def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue):
     status_queue.put('Attempting to decompress..')
     data = decompress_replay(replay)
-    dota_players_hm, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
+    dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
 
-    dota_players = []
-    for slot in dota_players_hm.keys():
-        if dota_players_hm[slot]:
-            dota_players.append(dota_players_hm[slot])
+
 
 
     # check if already uploaded
@@ -816,6 +813,7 @@ def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=
     try:
         dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
     except NotCompleteGame:
+        raise NotCompleteGame # TODO dont
         dota_players, mode, unparsed = parse_incomplete_game(data)
         if winner is None:
             raise Exception('auto_replay_upload incomplete replay with no given arguments')
