@@ -390,7 +390,13 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
             print("bluehost rejected: ", e)
             #return "The game is uploaded to local database, but the bluehost webserver was busy so updating that later. Feel free to upload next game. https://stats.firstbloodgaming.com/game/" + str(game_id)
 
-    return "Replay uploaded. https://stats.firstbloodgaming.com/game/" + str(game_id)
+
+    if keys.GAMETYPE == 'lod':
+        msg = "Game saved to local database. Game id: " + str(game_id)
+    else:
+        "Replay uploaded. https://stats.firstbloodgaming.com/game/" + str(game_id)
+
+    return msg
 
 
 def rank_game(game_id, status):
@@ -1861,7 +1867,8 @@ class Client(discord.Client):
                 await message.channel.send('Decompress error.')
             except NotCompleteGame:
                 await message.channel.send('Incomplete game.')
-                await Client.manual_input_replay_handler(message, data)
+                if not keys.GAMETYPE == 'lod':
+                    await Client.manual_input_replay_handler(message, data)
             except NotDotaReplay:
                 await message.channel.send('Not a dota replay.')
             except UnregisteredPlayers:
