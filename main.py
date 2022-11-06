@@ -909,7 +909,7 @@ def show_game(game_id):
     sql = "select * from player_game where game_id=%s order by slot_nr ASC"
     player_games = fetchall(sql, game_id)
     teamsize = int(len(player_games) / 2)
-    for pg in player_games[:teamsize]:
+    for pg in player_games[:teamsize]: # TODO does not allow 3v4 etc
         player = get_player_id(pg['player_id'])
         name = player['bnet_tag']
         msg += strwidthright(name, 17)
@@ -1678,12 +1678,12 @@ class Client(discord.Client):
                 player_discord_id['bnet_tag'] = bnet_tag
                 player_discord_id['name'] = name
                 update_player(player_discord_id)
-                msg = "Your dota profile have changed to:\nBnet tag: " + player_discord_id['bnet_tag'] + '\nName: ' + player_discord_id['name']
+                msg = "Your dota profile has changed to:\nBnet tag: " + player_discord_id['bnet_tag'] + '\nName: ' + player_discord_id['name']
         else:
             if player_bnet['discord_id'] == user.id:
                 player_discord_id['name'] = name
                 update_player(player_discord_id)
-                msg = "Your dota profile have changed to:\nBnet tag: " + player_discord_id['bnet_tag'] + '\nName: ' + player_discord_id['name']
+                msg = "Your dota profile has changed to:\nBnet tag: " + player_discord_id['bnet_tag'] + '\nName: ' + player_discord_id['name']
 
             else:
                 msg = "A dota profile with the bnet tag " + player_bnet['bnet_tag'] + ' is already used by ' + player_bnet['name']
