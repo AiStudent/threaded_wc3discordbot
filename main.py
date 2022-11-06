@@ -934,8 +934,10 @@ def show_game(game_id):
         name = player['bnet_tag']
         msg += strwidthright(name, 17)
         if game['withkda'] == 1:
-            msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4, pg['wards'], 4, pg['hero_damage'], 6, pg['tower_damage'], 6)
-        msg += '\n'
+            if keys.GAMETYPE == 'lod':
+                msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
+            else:
+                msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4, pg['wards'], 4, pg['hero_damage'], 6, pg['tower_damage'], 6)        msg += '\n'
     msg += "```"
     return msg
 
