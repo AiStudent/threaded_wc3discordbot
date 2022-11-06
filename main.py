@@ -824,8 +824,8 @@ def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=
 
     team1, team2, db_entries, new_db_entries, old_db_entries = get_teams_and_dbentries(dota_players)
 
-    if len(team1) != len(team2) != 5:  # todo Is this needed?
-        raise Exception('Not 5x5 game')
+    #if len(team1) != len(team2) != 5:  # todo Is this needed?
+    #    raise Exception('Not 5x5 game')
 
     # determine elo change
     team1_avg_elo, team2_avg_elo = avg_team_elo(team1), avg_team_elo(team2)
