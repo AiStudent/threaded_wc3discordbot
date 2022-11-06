@@ -245,13 +245,21 @@ def structure_game_msg(winner, mins, secs, team1_win_elo_inc,
 
     msg += 'sentinel avg elo: ' + str(round(team1_avg_elo, 1)) + '\n'
     for dota_player in team1_dp:
-        msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
-                        dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4) + '\n'
+        if keys.GAMETYPE == 'lod':
+            msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
+                                 dota_player.deaths, 4, dota_player.assists, 4) + '\n'
+        else:
+            msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
+                            dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4) + '\n'
         # dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4, dota_player.hero_damage, 6, dota_player.tower_damage, 6) + '\n'
     msg += 'scourge avg elo: ' + str(round(team2_avg_elo, 1)) + '\n'
     for dota_player in team2_dp:
-        msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
-                        dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4) + '\n'
+        if keys.GAMETYPE == 'lod':
+            msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
+                                 dota_player.deaths, 4, dota_player.assists, 4) + '\n'
+        else:
+            msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
+                            dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4) + '\n'
         # dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4, dota_player.hero_damage, 6, dota_player.tower_damage, 6) + '\n'
     msg += "```"
     return msg
@@ -912,7 +920,10 @@ def show_game(game_id):
         name = player['bnet_tag']
         msg += strwidthright(name, 17)
         if game['withkda'] == 1:
-            msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4, pg['wards'], 4, pg['hero_damage'], 6, pg['tower_damage'], 6)
+            if keys.GAMETYPE == 'lod':
+                msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
+            else:
+                msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4, pg['wards'], 4, pg['hero_damage'], 6, pg['tower_damage'], 6)
         msg += '\n'
 
     msg += "scourge elo: " + str(round(game['team2_elo'], 1)) + ", change: " \
