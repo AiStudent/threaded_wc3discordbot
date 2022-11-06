@@ -11,9 +11,18 @@ import requests
 import queue
 from w3gtest.decompress import decompress_replay
 from w3gtest.decompress import CouldNotDecompress
-from w3gtest.dota_stats import get_dota_w3mmd_stats
-from w3gtest.dota_stats import NotCompleteGame, NotDotaReplay, parse_incomplete_game
-from w3gtest.dota_stats import DotaPlayer
+
+if keys.GAMETYPE == 'lod':
+    TEAMSIZE = 10
+    from w3gtest.lod_stats import get_dota_w3mmd_stats
+    from w3gtest.lod_stats import NotCompleteGame, NotDotaReplay, parse_incomplete_game
+    from w3gtest.lod_stats import DotaPlayer
+else:
+    TEAMSIZE = 5
+    from w3gtest.dota_stats import get_dota_w3mmd_stats
+    from w3gtest.dota_stats import NotCompleteGame, NotDotaReplay, parse_incomplete_game
+    from w3gtest.dota_stats import DotaPlayer
+
 from elo import teams_update_elo, team_win_elos, avg_team_elo
 from elo import avg_team_elo_dict, team_win_elos_dict
 import fnmatch
@@ -200,24 +209,24 @@ def sd_players(name: str, name2: str):
         a_slot_nr = row['a_slot_nr']
         b_slot_nr = row['b_slot_nr']
         if winner == 'sentinel':
-            if a_slot_nr < 5:
-                if b_slot_nr < 5:
+            if a_slot_nr < TEAMSIZE:
+                if b_slot_nr < TEAMSIZE:
                     same_team_wins += 1
                 else:
                     a_wins_over_b += 1
             else:
-                if b_slot_nr < 5:
+                if b_slot_nr < TEAMSIZE:
                     b_wins_over_a += 1
                 else:
                     same_team_loss += 1
         else:
-            if a_slot_nr < 5:
-                if b_slot_nr < 5:
+            if a_slot_nr < TEAMSIZE:
+                if b_slot_nr < TEAMSIZE:
                     same_team_loss += 1
                 else:
                     b_wins_over_a += 1
             else:
-                if b_slot_nr < 5:
+                if b_slot_nr < TEAMSIZE:
                     a_wins_over_b += 1
                 else:
                     same_team_wins += 1
@@ -291,7 +300,13 @@ def add_dp_dbentries(dota_players, db_entries, winner):
 def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue):
     status_queue.put('Attempting to decompress..')
     data = decompress_replay(replay)
-    dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
+    dota_players_hm, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
+
+    dota_players = []
+    for slot in dota_players_hm.keys():
+        if dota_players_hm[slot]:
+            dota_players.append(dota_players_hm[slot])
+
 
     # check if already uploaded
     stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
@@ -302,8 +317,9 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
 
     team1, team2, db_entries, new_db_entries, old_db_entries = get_teams_and_dbentries(dota_players)
 
-    if len(team1) != len(team2):
-        return "Not an equal amount of players on both teams."
+    # TODO Ignoring team sizes
+    #if len(team1) != len(team2):
+    #    return "Not an equal amount of players on both teams."
 
     # determine elo change
     team1_win_elo_inc, team2_win_elo_inc = team_win_elos(team1, team2)
@@ -453,7 +469,7 @@ def recalculate_elo_from_game(upload_time, status=None):
         # add pg stats to player
         for pg in pgs:
             p = get_player_id(pg['player_id'])
-            if pg['slot_nr'] < 5:
+            if pg['slot_nr'] < TEAMSIZE:
                 team1 += [p]
                 if winner == 'sentinel':
                     p['wins'] += 1
@@ -536,12 +552,12 @@ def reset_stats_of_latest_game(game_id):
     for pg in pgs:
         p = get_player_id(pg['player_id'])
         if game['winner'] == 'sentinel':
-            if pg['slot_nr'] < 5:
+            if pg['slot_nr'] < TEAMSIZE:
                 p['wins'] -= 1
             else:
                 p['loss'] -= 1
         else:
-            if pg['slot_nr'] >= 5:
+            if pg['slot_nr'] >= TEAMSIZE:
                 p['wins'] -= 1
             else:
                 p['loss'] -= 1
@@ -759,7 +775,9 @@ def get_teams_and_dbentries(dota_players):
     unregistered = []
     for dota_player in dota_players:
         dota_player.name = dota_player.name.lower()
+
         db_entry = get_player_bnet(dota_player.name)
+
         if db_entry is None:
             db_entry = DBEntry(dota_player)
             if keys.REMOTE_DB:
@@ -802,7 +820,7 @@ def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=
 
     team1, team2, db_entries, new_db_entries, old_db_entries = get_teams_and_dbentries(dota_players)
 
-    if len(team1) != len(team2) != 5:
+    if len(team1) != len(team2) != 5:  # todo Is this needed?
         raise Exception('Not 5x5 game')
 
     # determine elo change
@@ -883,7 +901,8 @@ def show_game(game_id):
 
     sql = "select * from player_game where game_id=%s order by slot_nr ASC"
     player_games = fetchall(sql, game_id)
-    for pg in player_games[:5]:
+    teamsize = int(len(player_games) / 2)
+    for pg in player_games[:teamsize]:
         player = get_player_id(pg['player_id'])
         if player['name']:
             name = player['name']
@@ -897,7 +916,7 @@ def show_game(game_id):
     msg += "scourge elo: " + str(round(game['team2_elo'], 1)) + ", change: " \
            + str(round(-game['team1_elo_change'], 1)) + '\n'
 
-    for pg in player_games[5:]:
+    for pg in player_games[teamsize:]:
         player = get_player_id(pg['player_id'])
         if player['name']:
             name = player['name']
@@ -976,7 +995,7 @@ def delete_replay(game_id):
     return "Replay file on disk not found."
 
 
-def auto_upload_typed(lines, winner, mins, secs):
+def auto_upload_typed(lines, winner, mins, secs): # TODO seems incomplete for both wards, and lod
     withkda = withcs = False
     k, d, a = None, None, None
     longline = ""
@@ -1100,7 +1119,7 @@ def auto_upload_typed(lines, winner, mins, secs):
             })
 
 
-def upload_typed_replay(payload: list, status: Status, status_queue: queue.Queue):
+def upload_typed_replay(payload: list, status: Status, status_queue: queue.Queue):  # TODO not lod updated
     withkda = withcs = False
     k, d, a = None, None, None
     if len(payload) == 13:
@@ -1271,7 +1290,7 @@ def upload_typed_replay(payload: list, status: Status, status_queue: queue.Queue
     return "Replay uploaded to db. Game ID: " + str(game_id)
     
 
-def capt_rank():
+def capt_rank(): # TODO Untested lod change
     sql = """
         select g.game_id, g.winner, blue.name as blue, pink.name as pink 
         from
@@ -1282,10 +1301,11 @@ def capt_rank():
         g.game_id=bluepg.game_id and
         g.game_id=pinkpg.game_id and
         bluepg.slot_nr=0 and
-        pinkpg.slot_nr=5 and
+        pinkpg.slot_nr=""" + str(TEAMSIZE) + """ and
         blue.player_id=bluepg.player_id and
         pink.player_id=pinkpg.player_id;
         """
+
 
     rows = fetchall(sql, ())
 
@@ -1358,9 +1378,14 @@ def get_all_stats():
     ) + '\n'
 
     for player in rows:
+        if keys.GAMETYPE == 'lod':
+            name = player['bnet_tag']
+        else:
+            name = player['name']
+
         player_stats += strwidthleft(
             player['rank'], 4,
-            player['name'], 23,
+            name, 23,
             round(player['elo'],1), 8,
             player['wins'], 4,
             player['loss'], 4,
@@ -1840,9 +1865,9 @@ class Client(discord.Client):
                 await message.channel.send('Not a dota replay.')
             except UnregisteredPlayers:
                 await message.channel.send(str(t1.exception.msg))
-            except Exception as e:
-                c = str(t1.exception.__class__.__name__)
-                await message.channel.send(c + ': ' + str(e))
+            #except Exception as e:
+            #    c = str(t1.exception.__class__.__name__)
+            #    await message.channel.send(c + ': ' + str(e))
 
         else:
             await message.channel.send(t1.rv)
