@@ -178,7 +178,7 @@ def sd_player(name: str):
     elif p['games'] == 0:
         msg = name + ' has not played any games yet.'
     else:
-        if keys.GAMETYPE == 'lod:'
+        if keys.GAMETYPE == 'lod':
             msg = name + ': ' + str(round(p['elo'], 1)) + ' elo, ' + \
             'W/L ' + slash_delimited(p['wins'], p['loss']) + ', avg KDA ' + \
             slash_delimited(round(p['avgkills'], 1), round(p['avgdeaths'], 1), round(p['avgassists'], 1)) +\
