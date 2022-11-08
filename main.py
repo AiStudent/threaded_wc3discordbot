@@ -1556,7 +1556,7 @@ class Client(discord.Client):
         elif command == '!force_register' and admin:
             await self.force_register(message, payload)
         for attachment in message.attachments:
-            if admin and message.channel.name == upload_channel:
+            if message.channel.name == upload_channel: # TODO REMOVE AND ADMIN
                 if attachment.filename[-4:] == '.w3g':
                     data = requests.get(attachment.url).content
                     await self.replay_handler(message, data)
@@ -1702,7 +1702,7 @@ class Client(discord.Client):
                 msg = "Your dota profile has changed to:\nBnet tag: " + player_discord_id['bnet_tag'] + '\nName: ' + player_discord_id['name']
 
             else:
-                msg = "A dota profile with the bnet tag " + player_bnet['bnet_tag'] + ' is already used by ' + player_bnet['name']
+                msg = "A dota profile with the bnet tag " + str(player_bnet['bnet_tag']) + ' is already used by ' + str(player_bnet['name']) # TODO THIS HAPPENS SOMETIME WITH NO INIT LINKING AT FIRST
 
         msg = emb(msg)
         await message.channel.send(msg)
