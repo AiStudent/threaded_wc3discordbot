@@ -919,13 +919,13 @@ def show_game(game_id):
     sql = "select * from player_game where game_id=%s order by slot_nr ASC"
     player_games = fetchall(sql, game_id)
     teamsize = int(len(player_games) / 2)
-    for pg in player_games[:teamsize]: # TODO does not allow 3v4 etc
+    for pg in player_games[:teamsize]:  # TODO does not allow 3v4 etc
         player = get_player_id(pg['player_id'])
         name = player['bnet_tag']
-        msg += strwidthright(name, 17)
+        msg += strwidthright(name, 18)
         if game['withkda'] == 1:
             if keys.GAMETYPE == 'lod':
-                msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
+                msg += strwidthright(" ", 1, pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
             else:
                 msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4, pg['wards'], 4, pg['hero_damage'], 6, pg['tower_damage'], 6)
         msg += '\n'
@@ -936,10 +936,10 @@ def show_game(game_id):
     for pg in player_games[teamsize:]:
         player = get_player_id(pg['player_id'])
         name = player['bnet_tag']
-        msg += strwidthright(name, 17)
+        msg += strwidthright(name, 18)
         if game['withkda'] == 1:
             if keys.GAMETYPE == 'lod':
-                msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
+                msg += strwidthright(" ", 1, pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4)
             else:
                 msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4, pg['wards'], 4, pg['hero_damage'], 6, pg['tower_damage'], 6)
         msg += '\n'
