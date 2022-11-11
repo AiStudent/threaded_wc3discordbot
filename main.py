@@ -1715,9 +1715,9 @@ class Client(discord.Client):
                     msg = "Claimed existing dota profile:\nBnet tag: " + player_bnet['bnet_tag'] + '\nName: ' + player_bnet['name']
 
                 else:  # already have a dota profile
-                    msg = "You already had an account:\nBnet tag: " + str(
-                        player_discord_id['bnet_tag']) + '\nName: ' + str(
-                        player_discord_id['name'])
+                    #msg = "You already had an account:\nBnet tag: " + str(
+                    #    player_discord_id['bnet_tag']) + '\nName: ' + str(
+                    #    player_discord_id['name'])
 
                     player_discord_id['discord_id'] = None
                     player_discord_id['name'] = None
@@ -1727,7 +1727,7 @@ class Client(discord.Client):
                     player_bnet['name'] = name
                     update_player(player_bnet)    # claiming
 
-                    msg += "\nMoved you to the unclaimed account:\nBnet tag: " + str(
+                    msg = "Your dota profile:\nBnet tag: " + str(
                         player_bnet['bnet_tag']) + '\nName: ' + str(
                         player_bnet['name'])
 
