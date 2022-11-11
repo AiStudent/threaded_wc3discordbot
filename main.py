@@ -1363,6 +1363,18 @@ def capt_rank(): # TODO Untested lod change
     return msg
 
 
+def commit_sql(sql):
+    print(sql)
+
+    rows = fetchall(sql, ())
+
+    table_str = ""
+    for row in rows:
+        table_str += str(row) + '\n'
+
+    return table_str, None
+
+
 def get_all_stats():
     # normal ranking
     sql = "select * from player where rank order by rank"
@@ -1497,6 +1509,7 @@ class Client(discord.Client):
         # TODO Will need to exclude dota admins for lod force register
         author = message.author
         roles = [role.name for role in author.roles]
+        developer = ('Development' in roles)
         if keys.GAMETYPE == 'lod':
             admin = ('LoD-Admin' in roles) or ('DotA-Admin' in roles) or ('Development' in roles)
             dota_role = any([role in roles for role in ['LoD-Admin', 'LoD-Trial', 'LoD']])
@@ -1513,6 +1526,8 @@ class Client(discord.Client):
             await self.capt_rank_handler(message)
         elif command == '!get_all_stats':
             await self.get_all_stats_handler(message)
+        elif command == '!commit_sql' and payload and developer:
+            await self.commit_sql_handler(message, payload)
         elif command == '!confirm':
             await self.confirm_replay_handler(message)
         elif command == '!discard':
@@ -1565,6 +1580,31 @@ class Client(discord.Client):
                     await self.users_upload_handler(message, data)
                 else:
                     await messager.send('Not a wc3 replay.')
+
+
+    @staticmethod
+    async def commit_sql_handler(message, payload):
+        sql = " ".join(payload)
+
+        t1 = ThreadAnything(commit_sql, (sql,))
+        t1.start()
+
+        response = Message(message.channel)
+
+        while t1.is_alive():
+            await asyncio.sleep(0.1)
+
+        if t1.exception:
+            await response.send(str(t1.exception))
+            raise t1.exception
+
+        if t1.rv:
+            fio = io.StringIO(t1.rv[0])
+            f1 = discord.File(fio, "result.txt")
+            await message.channel.send(files=[f1])
+        else:
+            await response.send('No return from commit_sql.')
+
 
     @staticmethod
     async def force_register(message, payload):
@@ -2137,7 +2177,7 @@ class Client(discord.Client):
             await asyncio.sleep(0.1)
 
         if t1.exception:
-            message.channel.send("delete_replay exception")
+            await message.channel.send("delete_replay exception")
             raise t1.exception
         else:
             await message.channel.send(t1.rv)
