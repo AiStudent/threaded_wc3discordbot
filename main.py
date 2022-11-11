@@ -616,7 +616,7 @@ def reset_stats_of_latest_game(game_id):
 
 
 def cleard_db(save_users=True):
-    if keys.local_debugging:
+    if keys.remove_users_at_cleardb:
         save_users = False
 
     sql = "delete from games"
@@ -1570,10 +1570,10 @@ class Client(discord.Client):
     async def force_register(message, payload):
         try:
             discord_id = int(payload[0].replace('!', '')[2:-1])
-            bnet_tag = payload[1]
+            bnet_tag = payload[1].lower()
             bnet_tag2 = None
             if len(payload) > 2:
-                bnet_tag2 = payload[2]
+                bnet_tag2 = payload[2].lower()
 
             member = message.guild.get_member(discord_id)
 
@@ -1677,6 +1677,11 @@ class Client(discord.Client):
         discord_id = user.id
         name = user.display_name.lower()
 
+        if not bnet_tag.replace('#', "").isalnum():
+            msg = emb("bnet_tag should be abc#123")
+            await message.channel.send(msg)
+            return
+
         # check if bnet_tag exists in players
         player_bnet = get_player_bnet(bnet_tag)
         player_discord_id = get_player_discord_id(user.id)
@@ -1696,10 +1701,36 @@ class Client(discord.Client):
                 update_player(player_discord_id)
                 msg = "Your dota profile has changed to:\nBnet tag: " + player_discord_id['bnet_tag'] + '\nName: ' + player_discord_id['name']
         else:
-            if player_bnet['discord_id'] == user.id:
+            if player_bnet['discord_id'] == discord_id:  # their account, they can do whatever - nothing except name updates though
+
                 player_discord_id['name'] = name
                 update_player(player_discord_id)
                 msg = "Your dota profile has changed to:\nBnet tag: " + player_discord_id['bnet_tag'] + '\nName: ' + player_discord_id['name']
+
+            elif player_bnet['discord_id'] is None:  # generated account free for grabs
+                if player_discord_id is None:  # no previous account
+                    player_bnet['discord_id'] = discord_id
+                    player_bnet['name'] = name
+                    update_player(player_bnet)
+                    msg = "Claimed existing dota profile:\nBnet tag: " + player_bnet['bnet_tag'] + '\nName: ' + player_bnet['name']
+
+                else:  # already have a dota profile
+                    msg = "You already had an account:\nBnet tag: " + str(
+                        player_discord_id['bnet_tag']) + '\nName: ' + str(
+                        player_discord_id['name'])
+
+                    player_discord_id['discord_id'] = None
+                    player_discord_id['name'] = None
+                    update_player(player_discord_id)    # making it unclaimed
+
+                    player_bnet['discord_id'] = discord_id
+                    player_bnet['name'] = name
+                    update_player(player_bnet)    # claiming
+
+                    msg += "\nMoved you to the unclaimed account:\nBnet tag: " + str(
+                        player_bnet['bnet_tag']) + '\nName: ' + str(
+                        player_bnet['name'])
+
 
             else:
                 msg = "A dota profile with the bnet tag " + str(player_bnet['bnet_tag']) + ' is already used by ' + str(player_bnet['name']) # TODO THIS HAPPENS SOMETIME WITH NO INIT LINKING AT FIRST
