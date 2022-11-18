@@ -2260,3 +2260,14 @@ intents = discord.Intents.all()
 intents.members = True
 client = Client(intents=intents)
 client.run(keys.TOKEN)
+
+
+
+""" new 2.1 according to kappa
+intents = discord.Intents.all()
+intents.members = True
+intents.typing = True
+intents.presences = True
+client = commands.Bot(command_prefix=BOT_PREFIX, help_command=None, intents=intents, case_insensitive=True)
+
+"""
