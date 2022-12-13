@@ -1843,7 +1843,10 @@ class Client(discord.Client):
             fio2 = io.StringIO(t1.rv[1])    # captain stats
             f1 = discord.File(fio, "player_stats.txt")
             f2 = discord.File(fio2, "captain_stats.txt")
-            await message.channel.send(files=[f1,f2])
+            if keys.GAMETYPE == 'lod':
+                await message.channel.send(files=[f1])
+            else:
+                await message.channel.send(files=[f1, f2])
         else:
             await response.send('No return from capt_rank.')
 
