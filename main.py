@@ -1363,7 +1363,7 @@ def capt_rank(): # TODO Untested lod change
     return msg
 
 
-def commit_sql(sql):
+def fetch_sql(sql):
     print(sql)
 
     rows = fetchall(sql, ())
@@ -1527,7 +1527,7 @@ class Client(discord.Client):
         elif command == '!get_all_stats':
             await self.get_all_stats_handler(message)
         elif command == '!commit_sql' and payload and developer:
-            await self.commit_sql_handler(message, payload)
+            await self.fetch_sql_handler(message, payload)
         elif command == '!confirm':
             await self.confirm_replay_handler(message)
         elif command == '!discard':
@@ -1583,10 +1583,10 @@ class Client(discord.Client):
 
 
     @staticmethod
-    async def commit_sql_handler(message, payload):
+    async def fetch_sql_handler(message, payload):
         sql = " ".join(payload)
 
-        t1 = ThreadAnything(commit_sql, (sql,))
+        t1 = ThreadAnything(fetch_sql, (sql,))
         t1.start()
 
         response = Message(message.channel)
