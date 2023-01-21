@@ -25,9 +25,10 @@ def commit(sql, args):
 def commit_and_check(sql, args):
     connection = connect_to_db()
     with connection.cursor() as cursor:
-        result = cursor.execute(sql, args)
+        cursor.execute(sql, args)
+        cursor.execute("SELECT LAST_INSERT_ID()", ())
+        result = cursor.fetchone()
         connection.commit()
-
     connection.close()
     return result
 
@@ -214,9 +215,7 @@ def get_elo_history(bnet_tag):
 
 
 if __name__ == '__main__':
-    sql = "describe player;"
-    res = commit_and_check(sql, ())
-    print(res)
+    print(get_elo_history("ricefire#1366"))
 
 
 """

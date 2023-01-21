@@ -5,7 +5,7 @@ import asyncio
 from basic_functions import *
 from mysql import get_player, insert_player, insert_game, update_player,\
     insert_player_game, get_game, get_player_bnet, get_player_discord_id
-from mysql import fetchall, fetchone, commit, commit_and_check, update_game, get_player_id, update_player_game
+from mysql import fetchall, fetchone, commit, update_game, get_player_id, update_player_game
 import keys
 import requests
 import queue
@@ -1362,7 +1362,8 @@ def capt_rank(): # TODO Untested lod change
     # return all
     return msg
 
-def fetch_sql(sql):
+
+def commit_sql(sql):
     print(sql)
 
     rows = fetchall(sql, ())
@@ -1370,16 +1371,6 @@ def fetch_sql(sql):
     table_str = ""
     for row in rows:
         table_str += str(row) + '\n'
-
-    return table_str, None
-
-
-def commit_sql(sql):
-    print(sql)
-
-    rows_affected = commit_and_check(sql, ())
-
-    table_str = "rows affected: " + str(rows_affected)
 
     return table_str, None
 
@@ -1537,8 +1528,6 @@ class Client(discord.Client):
             await self.get_all_stats_handler(message)
         elif command == '!commit_sql' and payload and developer:
             await self.commit_sql_handler(message, payload)
-        elif command == '!fetch_sql' and payload and developer:
-            await self.fetch_sql_handler(message, payload)
         elif command == '!confirm':
             await self.confirm_replay_handler(message)
         elif command == '!discard':
@@ -1616,28 +1605,6 @@ class Client(discord.Client):
         else:
             await response.send('No return from commit_sql.')
 
-    @staticmethod
-    async def fetch_sql_handler(message, payload):
-        sql = " ".join(payload)
-
-        t1 = ThreadAnything(fetch_sql, (sql,))
-        t1.start()
-
-        response = Message(message.channel)
-
-        while t1.is_alive():
-            await asyncio.sleep(0.1)
-
-        if t1.exception:
-            await response.send(str(t1.exception))
-            raise t1.exception
-
-        if t1.rv:
-            fio = io.StringIO(t1.rv[0])
-            f1 = discord.File(fio, "result.txt")
-            await message.channel.send(files=[f1])
-        else:
-            await response.send('No return from commit_sql.')
 
     @staticmethod
     async def force_register(message, payload):
@@ -1745,69 +1712,71 @@ class Client(discord.Client):
 
     @staticmethod
     async def link_handler(message, payload):
-        try:
-            bnet_tag = payload[0].lower()
-            user = message.author
-            discord_id = user.id
-            name = user.display_name.lower()
+        bnet_tag = payload[0].lower()
+        user = message.author
+        discord_id = user.id
+        name = user.display_name.lower()
 
-            if not bnet_tag.replace('#', "").isalnum():
-                msg = emb("bnet_tag should be abc#123")
-                await message.channel.send(msg)
-                return
-
-            # check if bnet_tag exists in players
-            player_bnet = get_player_bnet(bnet_tag)
-            player_discord_id = get_player_discord_id(user.id)
-
-            if not player_bnet:
-                if not player_discord_id:
-                    insert_player({
-                        'name': name,
-                        'bnet_tag': bnet_tag,
-                        'discord_id': discord_id
-                    })
-                    msg = "Created dota profile:\nBnet tag: " + bnet_tag + '\nName: ' + user.display_name
-
-                else:
-                    player_discord_id['bnet_tag'] = bnet_tag
-                    player_discord_id['name'] = name
-                    update_player(player_discord_id)
-                    msg = "Your dota profile has changed to:\nBnet tag: " + player_discord_id['bnet_tag'] + '\nName: ' + player_discord_id['name']
-            else:
-                if player_bnet['discord_id'] == discord_id:  # their account, they can do whatever - nothing except name updates though
-
-                    player_discord_id['name'] = name
-                    update_player(player_discord_id)
-                    msg = "Your dota profile has changed to:\nBnet tag: " + player_discord_id['bnet_tag'] + '\nName: ' + player_discord_id['name']
-
-                elif player_bnet['discord_id'] is None:  # generated account free for grabs
-                    if player_discord_id is None:  # no previous account
-                        player_bnet['discord_id'] = discord_id
-                        player_bnet['name'] = name
-                        update_player(player_bnet)
-                        msg = "Claimed existing dota profile:\nBnet tag: " + player_bnet['bnet_tag'] + '\nName: ' + player_bnet['name']
-
-                    else:  # already have a dota profile
-                        player_discord_id['discord_id'] = None
-                        player_discord_id['name'] = None
-                        update_player(player_discord_id)    # making it unclaimed
-
-                        player_bnet['discord_id'] = discord_id
-                        player_bnet['name'] = name
-                        update_player(player_bnet)    # claiming
-
-                        msg = "Your dota profile:\nBnet tag: " + str(
-                            player_bnet['bnet_tag']) + '\nName: ' + str(
-                            player_bnet['name'])
-                else:
-                    msg = "A dota profile with the bnet tag " + str(player_bnet['bnet_tag']) + ' is already used by ' + str(player_bnet['name']) # TODO THIS HAPPENS SOMETIME WITH NO INIT LINKING AT FIRST
-
-            msg = emb(msg)
+        if not bnet_tag.replace('#', "").isalnum():
+            msg = emb("bnet_tag should be abc#123")
             await message.channel.send(msg)
-        except Exception as e:
-            await message.channel.send(e)
-            raise e
+            return
+
+        # check if bnet_tag exists in players
+        player_bnet = get_player_bnet(bnet_tag)
+        player_discord_id = get_player_discord_id(user.id)
+
+        if not player_bnet:
+            if not player_discord_id:
+                insert_player({
+                    'name': name,
+                    'bnet_tag': bnet_tag,
+                    'discord_id': discord_id
+                })
+                msg = "Created dota profile:\nBnet tag: " + bnet_tag + '\nName: ' + user.display_name
+
+            else:
+                player_discord_id['bnet_tag'] = bnet_tag
+                player_discord_id['name'] = name
+                update_player(player_discord_id)
+                msg = "Your dota profile has changed to:\nBnet tag: " + player_discord_id['bnet_tag'] + '\nName: ' + player_discord_id['name']
+        else:
+            if player_bnet['discord_id'] == discord_id:  # their account, they can do whatever - nothing except name updates though
+
+                player_discord_id['name'] = name
+                update_player(player_discord_id)
+                msg = "Your dota profile has changed to:\nBnet tag: " + player_discord_id['bnet_tag'] + '\nName: ' + player_discord_id['name']
+
+            elif player_bnet['discord_id'] is None:  # generated account free for grabs
+                if player_discord_id is None:  # no previous account
+                    player_bnet['discord_id'] = discord_id
+                    player_bnet['name'] = name
+                    update_player(player_bnet)
+                    msg = "Claimed existing dota profile:\nBnet tag: " + player_bnet['bnet_tag'] + '\nName: ' + player_bnet['name']
+
+                else:  # already have a dota profile
+                    #msg = "You already had an account:\nBnet tag: " + str(
+                    #    player_discord_id['bnet_tag']) + '\nName: ' + str(
+                    #    player_discord_id['name'])
+
+                    player_discord_id['discord_id'] = None
+                    player_discord_id['name'] = None
+                    update_player(player_discord_id)    # making it unclaimed
+
+                    player_bnet['discord_id'] = discord_id
+                    player_bnet['name'] = name
+                    update_player(player_bnet)    # claiming
+
+                    msg = "Your dota profile:\nBnet tag: " + str(
+                        player_bnet['bnet_tag']) + '\nName: ' + str(
+                        player_bnet['name'])
+
+
+            else:
+                msg = "A dota profile with the bnet tag " + str(player_bnet['bnet_tag']) + ' is already used by ' + str(player_bnet['name']) # TODO THIS HAPPENS SOMETIME WITH NO INIT LINKING AT FIRST
+
+        msg = emb(msg)
+        await message.channel.send(msg)
 
     @staticmethod
     async def force_unlock_handler(message):
