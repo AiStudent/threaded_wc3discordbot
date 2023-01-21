@@ -1363,6 +1363,17 @@ def capt_rank(): # TODO Untested lod change
     return msg
 
 
+def commit_sql(sql):
+    print(sql)
+
+    res = commit(sql, ())
+
+    table_str = "rows affected: " + str(res)
+
+    return table_str, None
+
+
+
 def fetch_sql(sql):
     print(sql)
 
@@ -1526,8 +1537,10 @@ class Client(discord.Client):
             await self.capt_rank_handler(message)
         elif command == '!get_all_stats':
             await self.get_all_stats_handler(message)
-        elif command == '!commit_sql' and payload and developer:
+        elif command == '!fetch_sql' and payload and developer:
             await self.fetch_sql_handler(message, payload)
+        elif command == '!commit_sql' and payload and developer:
+            await self.commit_sql_handler(message, payload)
         elif command == '!confirm':
             await self.confirm_replay_handler(message)
         elif command == '!discard':
@@ -1582,6 +1595,31 @@ class Client(discord.Client):
                     await messager.send('Not a wc3 replay.')
 
 
+
+    @staticmethod
+    async def commit_sql_handler(message, payload):
+        sql = " ".join(payload)
+
+        t1 = ThreadAnything(commit_sql, (sql,))
+        t1.start()
+
+        response = Message(message.channel)
+
+        while t1.is_alive():
+            await asyncio.sleep(0.1)
+
+        if t1.exception:
+            await response.send(str(t1.exception))
+            raise t1.exception
+
+        if t1.rv:
+            fio = io.StringIO(t1.rv[0])
+            f1 = discord.File(fio, "result.txt")
+            await message.channel.send(files=[f1])
+        else:
+            await response.send('No return from commit_sql.')
+
+
     @staticmethod
     async def fetch_sql_handler(message, payload):
         sql = " ".join(payload)
@@ -1603,7 +1641,7 @@ class Client(discord.Client):
             f1 = discord.File(fio, "result.txt")
             await message.channel.send(files=[f1])
         else:
-            await response.send('No return from commit_sql.')
+            await response.send('No return from fetch_sql.')
 
 
     @staticmethod

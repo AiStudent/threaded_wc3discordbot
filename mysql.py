@@ -17,9 +17,10 @@ def connect_to_db():
 def commit(sql, args):
     connection = connect_to_db()
     with connection.cursor() as cursor:
-        cursor.execute(sql, args)
+        res = cursor.execute(sql, args)
         connection.commit()
     connection.close()
+    return res
 
 
 def commit_and_check(sql, args):
