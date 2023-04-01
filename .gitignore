@@ -1,0 +1,7 @@
+.idea/*
+.git/*
+keys.py
+*.pyc
+past_seasons/*
+replays/*
+

@@ -1479,11 +1479,11 @@ def new_season(status: Status, status_queue: queue.Queue):
     os.mkdir('replays')
 
     # save stats
-    f = open(new_season_path + '/player_stats.txt', 'w')
+    f = open(new_season_path + '/player_stats.txt', 'w', encoding="utf-8")
     print(player_stats, file=f, end='')
     f.close()
 
-    f = open(new_season_path + '/captain_stats.txt', 'w')
+    f = open(new_season_path + '/captain_stats.txt', 'w', encoding="utf-8")
     print(captain_stats, file=f, end='')
     f.close()
 
