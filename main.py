@@ -1888,7 +1888,7 @@ class Client(discord.Client):
                         player_bnet['name'] = name
                         update_player(player_bnet)  # claiming
 
-                        msg = "Your dota profile:\nBnet tag: " + str(
+                        msg = "Dota profile:\nBnet tag: " + str(
                             player_bnet['bnet_tag']) + '\nName: ' + str(
                             player_bnet['name'])
 
