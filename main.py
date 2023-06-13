@@ -1537,7 +1537,7 @@ class Client(discord.Client):
             await self.capt_rank_handler(message)
         elif command == '!get_all_stats':
             await self.get_all_stats_handler(message)
-        elif command == '!fetch_sql' and payload and developer:
+        elif command == '!fetch_sql' and payload:
             await self.fetch_sql_handler(message, payload)
         elif command == '!commit_sql' and payload and developer:
             await self.commit_sql_handler(message, payload)
