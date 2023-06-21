@@ -1585,6 +1585,8 @@ class Client(discord.Client):
             await self.force_register(message, payload)
         elif command == '!force_link' and admin:
             await self.force_link_handler(message, payload)
+        elif command == '!force_unlink' and admin:
+            await self.force_unlink_handler(message, payload)
         for attachment in message.attachments:
             if message.channel.name == upload_channel: # TODO REMOVE AND ADMIN
                 if attachment.filename[-4:] == '.w3g':
@@ -1897,6 +1899,30 @@ class Client(discord.Client):
                     msg = "A dota profile with the bnet tag " + str(
                         player_bnet['bnet_tag']) + ' is already used by ' + str(
                         player_bnet['name'])  # TODO THIS HAPPENS SOMETIME WITH NO INIT LINKING AT FIRST
+
+            msg = emb(msg)
+            await message.channel.send(msg)
+        except Exception as e:
+            c = str(e.__class__.__name__)
+            await message.channel.send(c + ': ' + str(e))
+            raise e
+
+    @staticmethod
+    async def force_unlink_handler(message, payload):
+        try:
+            bnet_tag = payload[0].lower()
+
+            player_bnet = get_player_bnet(bnet_tag)
+
+            if player_bnet:
+                player_bnet['discord_id'] = None
+                player_bnet['name'] = None
+                update_player(player_bnet)
+                msg = "The profile is now ownerless \nbnet_tag: " + player_bnet['bnet_tag'] + '\n' \
+                                                                                      'discord_id: None\n' \
+                                                                                      'name: None'
+            else:
+                msg = "No profile found with the bnet_tag: " + bnet_tag
 
             msg = emb(msg)
             await message.channel.send(msg)
