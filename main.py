@@ -983,12 +983,11 @@ def reupload_all_replays(status: Status, status_queue: queue.Queue):
 
 
         # debug xl3osk:
-        sql = "select count(*) from player_game where player_id=1;"
-        sql2 = "select games from player where player_id=1;"
-        c = fetchone(sql, ())
-        g = fetchone(sql2, ())
-
-        assert c['count(*)'] == g['games'], 'iter ' + str(n) + ": " + file
+        #sql = "select count(*) from player_game where player_id=1;"
+        #sql2 = "select games from player where player_id=1;"
+        #c = fetchone(sql, ())
+        #g = fetchone(sql2, ())
+        #assert c['count(*)'] == g['games'], 'iter ' + str(n) + ": " + file
 
 
     rank_players(status)
