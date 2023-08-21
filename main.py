@@ -954,6 +954,8 @@ def reupload_all_replays(status: Status, status_queue: queue.Queue):
     n = 0
     files = sorted(os.listdir('replays'))
     for file in files:
+
+
         status.progress = 'Uploading ' + slash_delimited(n+1, len(files))
         
         parts = file[:-4].split('_')
@@ -980,6 +982,16 @@ def reupload_all_replays(status: Status, status_queue: queue.Queue):
             winner = ['sentinel', 'scourge'][winner-1]
             auto_upload_typed(lines, winner, mins, secs)
         n += 1
+
+
+        # debug xl3osk:
+        sql = "select count(*) from player_game where player_id=1;"
+        sql2 = "select games from player where player_id=1;"
+        c = fetchone(sql, ())
+        g = fetchone(sql2, ())
+
+        assert c['count(*)'] == g['games'], 'iter ' + str(n) + ": " + file
+
 
     rank_players(status)
     if keys.REMOTE_DB:
