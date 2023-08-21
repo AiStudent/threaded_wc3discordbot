@@ -315,8 +315,6 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
 
 
-
-
     # check if already uploaded
     stats_bytes = str([dota_player.get_values() for dota_player in dota_players]).encode('utf-8')
     md5 = get_hash(stats_bytes)

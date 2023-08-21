@@ -2,7 +2,7 @@
 
 CREATE TABLE `games` (
    `game_id` int(11) NOT NULL AUTO_INCREMENT,
-   `mode` varchar(32) NULL,
+   `mode` varchar(64) NULL,
    `winner` varchar(32) NOT NULL,
    `duration` int(11) NOT NULL,
    `upload_time` varchar(32) NOT NULL,
