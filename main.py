@@ -501,6 +501,7 @@ def recalculate_elo_from_game(upload_time, status=None):
             update_player_game(pg)
             p['games'] += 1
             if game['withkda'] == 1:
+                assert p['kdagames'] != -1, p['name']
                 p['kdagames'] += 1
                 p['kills'] += pg['kills']
                 p['deaths'] += pg['deaths']
