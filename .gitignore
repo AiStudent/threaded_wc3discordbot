@@ -4,4 +4,8 @@ keys.py
 *.pyc
 past_seasons/*
 replays/*
+linkings.txt
+setting_up_the_bot.txt
+test_replays/*
+w3gtest/
 
