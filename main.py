@@ -827,7 +827,7 @@ def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=
     except NotCompleteGame:
         if keys.GAMETYPE == 'lod':
             raise NotCompleteGame(-1)  # TODO dont
-        
+
         dota_players, mode, unparsed = parse_incomplete_game(data)
         if winner is None:
             raise Exception('auto_replay_upload incomplete replay with no given arguments')
@@ -2161,7 +2161,14 @@ class Client(discord.Client):
         if t1.exception:
             Client.lock = False
             Client.current_replay_upload = []
-            raise t1.exception
+            try:
+                raise t1.exception
+            except UnregisteredPlayers:
+                await message.channel.send(str(t1.exception.msg))
+            except Exception as e:
+                c = str(t1.exception.__class__.__name__)
+                await message.channel.send(c + ': ' + str(e))
+                raise e
         else:
             await message.channel.send(t1.rv)
 
