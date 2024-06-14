@@ -320,6 +320,7 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     md5 = get_hash(stats_bytes)
     if check_if_file_with_hash_exists(md5):
         game = get_game(md5, 'hash')
+        print("Game already exists:", md5)
         return "Replay already uploaded with Game ID: " + str(game['game_id'])
 
     team1, team2, db_entries, new_db_entries, old_db_entries = get_teams_and_dbentries(dota_players)
@@ -401,7 +402,7 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
     if keys.GAMETYPE == 'lod':
         msg = "Game saved to local database. Game id: " + str(game_id)
     else:
-        "Replay uploaded. https://stats.firstbloodgaming.com/game/" + str(game_id)
+        msg = "Replay uploaded. https://stats.firstbloodgaming.com/game/" + str(game_id)
 
     return msg
 
