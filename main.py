@@ -825,7 +825,9 @@ def auto_replay_upload(replay, date_and_time=None, winner=None, mins=None, secs=
     try:
         dota_players, winner, mins, secs, mode = get_dota_w3mmd_stats(data)
     except NotCompleteGame:
-        raise NotCompleteGame # TODO dont
+        if keys.GAMETYPE == 'lod':
+            raise NotCompleteGame(-1)  # TODO dont
+        
         dota_players, mode, unparsed = parse_incomplete_game(data)
         if winner is None:
             raise Exception('auto_replay_upload incomplete replay with no given arguments')
