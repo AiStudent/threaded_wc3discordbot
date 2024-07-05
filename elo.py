@@ -43,7 +43,7 @@ def teams_update_elo(team1, team2, winner):
     if keys.GAMETYPE == 'lod':
         bonus = 0
     else:
-        bonus = 2
+        bonus = 0
 
     if winner == 1 or winner == 'sentinel':
         team1[0].elo += bonus
