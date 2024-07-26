@@ -14,11 +14,13 @@ from w3gtest.decompress import CouldNotDecompress
 
 if keys.GAMETYPE == 'lod':
     TEAMSIZE = 10
+    strRating = 'elo'
     from w3gtest.lod_stats import get_dota_w3mmd_stats
     from w3gtest.lod_stats import NotCompleteGame, NotDotaReplay, parse_incomplete_game
     from w3gtest.lod_stats import DotaPlayer
 else:
     TEAMSIZE = 5
+    strRating = 'mmr'
     from w3gtest.dota_stats import get_dota_w3mmd_stats
     from w3gtest.dota_stats import NotCompleteGame, NotDotaReplay, parse_incomplete_game
     from w3gtest.dota_stats import DotaPlayer
@@ -183,7 +185,7 @@ def sd_player(name: str):
                 'W/L ' + slash_delimited(p['wins'], p['loss']) + ', avg KDA ' + \
                 slash_delimited(round(p['avgkills'], 1), round(p['avgdeaths'], 1), round(p['avgassists'], 1))
         else:
-            msg = name + ': ' + str(round(p['elo'], 1)) + ' elo, ' + \
+            msg = name + ': ' + str(round(p['elo'], 1)) + ' mmr, ' + \
                 'W/L ' + slash_delimited(p['wins'], p['loss']) + ', avg KDA ' + \
                 slash_delimited(round(p['avgkills'], 1), round(p['avgdeaths'], 1), round(p['avgassists'], 1)) +\
                 ', avg wards ' + str(round(p['avgwards'], 1))
@@ -241,13 +243,13 @@ def sd_players(name: str, name2: str):
 
 def structure_game_msg(winner, mins, secs, team1_win_elo_inc,
                        team2_win_elo_inc, dota_players, team1_avg_elo, team2_avg_elo, tower_hero_damage=False):
-    msg = "```Winner: " + winner + ', ' + str(mins) + 'm, ' + str(secs) + 's, elo ratio (' +\
+    msg = "```Winner: " + winner + ', ' + str(mins) + 'm, ' + str(secs) + 's, ' + strRating + ' ratio (' +\
           str(round(team1_win_elo_inc, 1)) + '/' + str(round(team2_win_elo_inc, 1)) + ')\n'
 
     team1_dp = [dota_player for dota_player in dota_players if dota_player.team == 1]
     team2_dp = [dota_player for dota_player in dota_players if dota_player.team == 2]
 
-    msg += 'sentinel avg elo: ' + str(round(team1_avg_elo, 1)) + '\n'
+    msg += 'sentinel avg ' + strRating + ": " + str(round(team1_avg_elo, 1)) + '\n'
     for dota_player in team1_dp:
         if keys.GAMETYPE == 'lod':
             msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
@@ -256,7 +258,7 @@ def structure_game_msg(winner, mins, secs, team1_win_elo_inc,
             msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
                             dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4) + '\n'
         # dota_player.deaths, 4, dota_player.assists, 4, dota_player.wards, 4, dota_player.hero_damage, 6, dota_player.tower_damage, 6) + '\n'
-    msg += 'scourge avg elo: ' + str(round(team2_avg_elo, 1)) + '\n'
+    msg += 'scourge avg ' + strRating + ": " + str(round(team2_avg_elo, 1)) + '\n'
     for dota_player in team2_dp:
         if keys.GAMETYPE == 'lod':
             msg += strwidthright(dota_player.name + ' ', 17, dota_player.kills, 4,
@@ -915,7 +917,7 @@ def show_game(game_id):
     secs = duration - 60*mins
     msg += str(mins) + 'm, ' + str(secs) + "s\n"
 
-    msg += "sentinel elo: " + str(round(game['team1_elo'], 1)) + ", change: " \
+    msg += "sentinel " + strRating + ": " + str(round(game['team1_elo'], 1)) + ", change: " \
            + str(round(game['team1_elo_change'], 1)) + '\n'
 
     sql = "select * from player_game where game_id=%s order by slot_nr ASC"
@@ -932,7 +934,7 @@ def show_game(game_id):
                 msg += strwidthright(pg['kills'], 4, pg['deaths'], 4, pg['assists'], 4, pg['wards'], 4, pg['hero_damage'], 6, pg['tower_damage'], 6)
         msg += '\n'
 
-    msg += "scourge elo: " + str(round(game['team2_elo'], 1)) + ", change: " \
+    msg += "scourge " + strRating + ": " + str(round(game['team2_elo'], 1)) + ", change: " \
            + str(round(-game['team1_elo_change'], 1)) + '\n'
 
     for pg in player_games[teamsize:]:
@@ -1408,7 +1410,7 @@ def get_all_stats():
     player_stats += strwidthleft(
         "r", 4,
         "name", 23,
-        "elo", 8,
+        strRating, 8,
         "W", 4,
         'L', 4,
         'K', 5,
