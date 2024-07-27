@@ -20,7 +20,7 @@ if keys.GAMETYPE == 'lod':
     from w3gtest.lod_stats import DotaPlayer
 else:
     TEAMSIZE = 5
-    strRating = 'mmr'
+    strRating = 'elo'
     from w3gtest.dota_stats import get_dota_w3mmd_stats
     from w3gtest.dota_stats import NotCompleteGame, NotDotaReplay, parse_incomplete_game
     from w3gtest.dota_stats import DotaPlayer
@@ -185,7 +185,7 @@ def sd_player(name: str):
                 'W/L ' + slash_delimited(p['wins'], p['loss']) + ', avg KDA ' + \
                 slash_delimited(round(p['avgkills'], 1), round(p['avgdeaths'], 1), round(p['avgassists'], 1))
         else:
-            msg = name + ': ' + str(round(p['elo'], 1)) + ' mmr, ' + \
+            msg = name + ': ' + str(round(p['elo'], 1)) + ' ' + strRating + ', ' + \
                 'W/L ' + slash_delimited(p['wins'], p['loss']) + ', avg KDA ' + \
                 slash_delimited(round(p['avgkills'], 1), round(p['avgdeaths'], 1), round(p['avgassists'], 1)) +\
                 ', avg wards ' + str(round(p['avgwards'], 1))
