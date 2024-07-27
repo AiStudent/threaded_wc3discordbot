@@ -30,10 +30,13 @@ def team_win_elos(team1, team2):
 def team_win_elos_dict(team1_avg_elo, team2_avg_elo):
     r1 = team1_avg_elo
     r2 = team2_avg_elo
-
     prob_t1, prob_t2 = prob_t1_t2_win(r1, r2)
-    team1_win_elo_inc = K * (1 - prob_t1)
-    team2_win_elo_inc = K - team1_win_elo_inc
+    if keys.GAMETYPE == 'lod':
+        team1_win_elo_inc = K * (1 - prob_t1)
+        team2_win_elo_inc = K - team1_win_elo_inc
+    else:
+        team1_win_elo_inc = 15
+        team2_win_elo_inc = 15
     return team1_win_elo_inc, team2_win_elo_inc
 
 
