@@ -29,8 +29,15 @@ def team_win_elos_dict(team1_avg_elo, team2_avg_elo):
         team1_win_elo_inc = K * (1 - prob_t1)
         team2_win_elo_inc = K - team1_win_elo_inc
     else:
-        team1_win_elo_inc = 15
-        team2_win_elo_inc = 15
+        #team1_win_elo_inc = 15
+        #team2_win_elo_inc = 15
+        # Fieryfox's alg:
+        c = team1_avg_elo
+        d = team2_avg_elo
+        Y = 15 - 15 * (c-d)/(c+d)
+        V = 30 - Y
+        team1_win_elo_inc = Y
+        team2_win_elo_inc = V
     return team1_win_elo_inc, team2_win_elo_inc
 
 
