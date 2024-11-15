@@ -957,8 +957,6 @@ def reupload_all_replays(status: Status, status_queue: queue.Queue):
     n = 0
     files = sorted(os.listdir('replays'))
     for file in files:
-
-
         status.progress = 'Uploading ' + slash_delimited(n+1, len(files))
         
         parts = file[:-4].split('_')
