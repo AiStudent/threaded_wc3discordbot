@@ -110,6 +110,7 @@ class DBEntry:
             self.player_id = None
             if isinstance(de, DotaPlayer):
                 self.bnet_tag = de.name
+                self.team = de.team
             else:
                 self.bnet_tag = de
             self.elo = 1000.0
@@ -326,10 +327,6 @@ def decompress_parse_db_replay(replay, status: Status, status_queue: queue.Queue
         return "Replay already uploaded with Game ID: " + str(game['game_id'])
 
     team1, team2, db_entries, new_db_entries, old_db_entries = get_teams_and_dbentries(dota_players)
-
-    # TODO Ignoring team sizes
-    #if len(team1) != len(team2):
-    #    return "Not an equal amount of players on both teams."
 
     # determine elo change
     team1_win_elo_inc, team2_win_elo_inc = team_win_elos(team1, team2)
